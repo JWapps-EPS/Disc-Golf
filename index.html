@@ -345,7 +345,10 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 
 <script>
 // ======== STATE ========
-let S={classes:{},currentClass:null,currentSeance:1};
+let S={classes:{},currentClass:null,currentSeance:1,courseLib:[],nextCourseId:1};
+// courseLib: [{id, name, distance}, ...]
+const GC=()=>S.courseLib;
+const findCourse=(id)=>S.courseLib.find(c=>c.id===id);
 const CD=()=>S.currentClass?S.classes[S.currentClass]:null;
 const SD=()=>{
   const cd=CD();if(!cd)return null;
@@ -357,29 +360,36 @@ const SD=()=>{
 const save=()=>localStorage.setItem('dg3',JSON.stringify(S));
 function load(){
   try{const d=localStorage.getItem('dg3');if(d)S=JSON.parse(d);}catch(e){}
-  // Migration: move diagData from seances to class level if needed
+  if(!S.courseLib)S.courseLib=[];
+  if(!S.nextCourseId)S.nextCourseId=(S.courseLib.length?Math.max(...S.courseLib.map(c=>c.id))+1:1);
+  // Migration: old globalCourses -> courseLib
+  if(S.globalCourses&&S.globalCourses.length){
+    S.globalCourses.forEach(c=>{
+      if(!S.courseLib.find(x=>x.name===c.name))
+        S.courseLib.push({id:S.nextCourseId++,name:c.name,distance:c.distance||0});
+    });
+    delete S.globalCourses;
+  }
+  // Migration: move diagData from seances to class level; migrate per-class courses to courseLib
   Object.values(S.classes||{}).forEach(cd=>{
     if(!cd.diagData)cd.diagData={};
     Object.values(cd.seances||{}).forEach(sd=>{
-      if(sd.diagData){
-        Object.assign(cd.diagData,sd.diagData);
-        delete sd.diagData;
-      }
+      if(sd.diagData){Object.assign(cd.diagData,sd.diagData);delete sd.diagData;}
     });
+    if(cd.courses){
+      cd.courses.forEach(c=>{
+        if(c.distance&&!S.courseLib.find(x=>x.name===c.name))
+          S.courseLib.push({id:S.nextCourseId++,name:c.name,distance:c.distance});
+      });
+      delete cd.courses;
+    }
   });
 }
 function newClassObj(){
   return {
     players:[],
     diagData:{},
-    seances:{'1':{teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}}},
-    courses:[
-      {id:1,name:'Parcours 1',distance:0},
-      {id:2,name:'Parcours 2',distance:0},
-      {id:3,name:'Parcours 3',distance:0},
-      {id:4,name:'Parcours 4',distance:0},
-      {id:5,name:'Parcours 5',distance:0}
-    ]
+    seances:{'1':{teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}}}
   };
 }
 function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
@@ -465,7 +475,21 @@ function updateClassSel(){
   sel.innerHTML='<option value="">— choisir —</option>';
   Object.keys(S.classes).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===S.currentClass)o.selected=true;sel.appendChild(o);});
 }
-function switchClass(){S.currentClass=document.getElementById('classSelect').value;S.currentSeance=1;renderAll();save();}
+function switchClass(){
+  S.currentClass=document.getElementById('classSelect').value;
+  S.currentSeance=1;
+  renderAll();
+  save();
+  // Re-render whichever tab is currently visible
+  const active=document.querySelector('.tab-page.active');
+  if(active){
+    const id=active.id.replace('tab-','');
+    if(id==='equipes')renderEquipes();
+    else if(id==='diag')renderDiag();
+    else if(id==='parcours')renderParcours();
+    else if(id==='classement')renderClassement();
+  }
+}
 
 // ======== SÉANCES ========
 function newSeance(){
@@ -475,7 +499,18 @@ function newSeance(){
   cd.seances[next]={teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}};
   S.currentSeance=next;renderSeanceSel();renderAll();save();toast(`Séance ${next} créée`);
 }
-function switchSeance(){S.currentSeance=parseInt(document.getElementById('seanceSelect').value);renderAll();}
+function switchSeance(){
+  S.currentSeance=parseInt(document.getElementById('seanceSelect').value);
+  renderAll();
+  const active=document.querySelector('.tab-page.active');
+  if(active){
+    const id=active.id.replace('tab-','');
+    if(id==='equipes')renderEquipes();
+    else if(id==='diag')renderDiag();
+    else if(id==='parcours')renderParcours();
+    else if(id==='classement')renderClassement();
+  }
+}
 function renderSeanceSel(){
   const cd=CD();const sel=document.getElementById('seanceSelect');sel.innerHTML='';
   if(!cd)return;
@@ -716,20 +751,51 @@ function toggleCfg(){
 }
 
 function renderCfg(){
-  const cd=CD();if(!cd)return;
-  document.getElementById('cfgArea').innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:9px">'+
-  cd.courses.map((c,i)=>`<div style="background:var(--gray-50);border-radius:8px;padding:10px">
-    <div style="font-size:12px;font-weight:600;color:var(--green-dark);margin-bottom:7px">${c.name}</div>
-    <div class="form-group" style="margin-bottom:6px"><label>Nom</label>
-      <input type="text" value="${c.name}" style="width:100%;font-size:12px" oninput="updateCourse(${i},'name',this.value)"></div>
-    <div class="form-group"><label>Distance</label>
-      <button class="num-btn${c.distance?' filled':''}" style="width:100%" onclick="openNp('Distance ${c.name}','m',${c.distance||'null'},v=>setCourse(${i},v))">${c.distance||'—'} m</button>
-    </div>
-  </div>`).join('')+'</div>';
+  const lib=GC();
+  let html=`<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+    <span style="font-size:12px;color:var(--gray-600)">Bibliothèque de parcours (partagée entre toutes les classes)</span>
+    <button class="btn btn-primary btn-sm" onclick="addCourseToLib()">+ Nouveau parcours</button>
+  </div>`;
+  if(!lib.length){html+='<div class="empty-state">Aucun parcours créé. Cliquez "+ Nouveau parcours".</div>';}
+  else{
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px">';
+    lib.forEach((c)=>{
+      html+=`<div style="background:var(--gray-50);border-radius:8px;padding:10px;position:relative">
+        <div class="form-group" style="margin-bottom:6px"><label>Nom</label>
+          <input type="text" value="${c.name}" style="width:100%;font-size:12px" oninput="updateCourseLib(${c.id},'name',this.value)"></div>
+        <div class="form-group"><label>Distance</label>
+          <button class="num-btn${c.distance?' filled':''}" style="width:100%" onclick="openNp('Distance — ${c.name}','m',${c.distance||'null'},v=>setCourseLib(${c.id},v))">${c.distance||'—'} m</button>
+        </div>
+        <button class="btn-icon" style="position:absolute;top:8px;right:8px;font-size:11px" onclick="deleteCourseLib(${c.id})" title="Supprimer">🗑</button>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  document.getElementById('cfgArea').innerHTML=html;
 }
 
-function updateCourse(i,field,val){const cd=CD();if(!cd)return;cd.courses[i][field]=val;save();}
-function setCourse(i,val){const cd=CD();if(!cd)return;cd.courses[i].distance=val;save();renderCfg();renderParcours();}
+function addCourseToLib(){
+  const id=S.nextCourseId++;
+  S.courseLib.push({id,name:'Parcours '+id,distance:0});
+  save();renderCfg();
+}
+
+function updateCourseLib(id,field,val){
+  const c=findCourse(id);if(!c)return;c[field]=val;save();
+}
+
+function setCourseLib(id,val){
+  const c=findCourse(id);if(!c)return;c.distance=val;save();renderCfg();renderParcours();
+}
+
+function deleteCourseLib(id){
+  S.courseLib=S.courseLib.filter(c=>c.id!==id);
+  save();renderCfg();renderParcours();
+}
+
+// legacy stubs kept for safety
+function updateCourse(i,field,val){if(GC()[i])GC()[i][field]=val;save();}
+function setCourse(i,val){if(GC()[i])GC()[i].distance=val;save();renderCfg();renderParcours();}
 
 function calcPar(course,players){
   const sd=SD();if(!course.distance)return null;
@@ -765,7 +831,7 @@ function renderParcours(){
   }
   lanes.innerHTML='';
 
-  cd.courses.forEach(course=>{
+  GC().forEach(course=>{
     const assigned=sd.courseAssignments.filter(a=>a.courseId===course.id);
     if(!assigned.length)return;
     const cc=document.createElement('div');cc.className='course-card';
@@ -930,7 +996,7 @@ function openAddTeamId(courseId){
   const ts=document.getElementById('selTeam');ts.innerHTML='';
   sd.teams.forEach((t,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`Éq.${i+1} : ${t.join(' & ')}`;ts.appendChild(o);});
   const cs=document.getElementById('selCourse');cs.innerHTML='';
-  cd.courses.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.distance?` (${c.distance}m)`:'');if(courseId&&c.id===courseId)o.selected=true;cs.appendChild(o);});
+  GC().forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.distance?` (${c.distance}m)`:'');if(courseId&&c.id===courseId)o.selected=true;cs.appendChild(o);});
   openMo('moAddTeam');
 }
 
@@ -962,14 +1028,30 @@ function buildPlayerScores(courseResults,teams){
   courseResults.forEach(r=>{
     const team=teams[r.teamIdx];if(!team)return;
     const diff=r.par?r.score-r.par:0;
-    team.forEach(p=>{if(!ps[p])ps[p]={total:0,results:[]};ps[p].total+=diff;ps[p].results.push({courseId:r.courseId,diff,seance:r.seance||'?'});});
+    const t=r.time||0;
+    team.forEach(p=>{
+      if(!ps[p])ps[p]={total:0,totalTime:0,results:[]};
+      ps[p].total+=diff;
+      ps[p].totalTime+=t;
+      ps[p].results.push({courseId:r.courseId,diff,seance:r.seance||'?',time:t});
+    });
   });
   return ps;
 }
 
-function renderRankTable(ranked,cd,showSeanceCol){
+function fmtTTotal(ms){
+  if(!ms)return'—';
+  const t=Math.floor(ms/1000);
+  const h=Math.floor(t/3600);
+  const m=Math.floor((t%3600)/60);
+  const s=t%60;
+  if(h>0)return h+'h'+String(m).padStart(2,'0')+'m'+String(s).padStart(2,'0')+'s';
+  return String(m).padStart(2,'0')+'m'+String(s).padStart(2,'0')+'s';
+}
+
+function renderRankTable(ranked,showSeanceCol){
   if(!ranked.length)return'<div class="empty-state">Aucun résultat</div>';
-  let html=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Total</th><th>${showSeanceCol?'Séances':'Parcours'}</th></tr></thead><tbody>`;
+  let html=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Coups</th><th>⏱ Temps</th><th>${showSeanceCol?'Par séance':'Parcours'}</th></tr></thead><tbody>`;
   ranked.forEach(([p,d],i)=>{
     const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
     const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
@@ -977,22 +1059,30 @@ function renderRankTable(ranked,cd,showSeanceCol){
     const ss=d.total===0?'PAR':(d.total>0?'+':'')+d.total;
     let det='<div class="det-badges">';
     if(showSeanceCol){
-      // Group by seance
       const bySeance={};
-      d.results.forEach(r=>{if(!bySeance[r.seance])bySeance[r.seance]=0;bySeance[r.seance]+=r.diff;});
+      d.results.forEach(r=>{if(!bySeance[r.seance])bySeance[r.seance]={diff:0,time:0};bySeance[r.seance].diff+=r.diff;bySeance[r.seance].time+=r.time||0;});
       Object.entries(bySeance).forEach(([s,v])=>{
-        const cl=v<0?'badge-green':v>0?'badge-red':'badge-gray';
-        det+=`<span class="det-b ${cl}">S${s} ${v===0?'PAR':(v>0?'+':'')+v}</span>`;
+        const cl=v.diff<0?'badge-green':v.diff>0?'badge-red':'badge-gray';
+        det+=`<span class="det-b ${cl}">S${s} ${v.diff===0?'PAR':(v.diff>0?'+':'')+v.diff} ${fmtTTotal(v.time)}</span>`;
       });
     } else {
-      cd.courses.forEach(c=>{
+      GC().forEach(c=>{
         const matches=d.results.filter(r=>r.courseId===c.id);
-        if(matches.length){const v=matches[0].diff;const cl=v<0?'badge-green':v>0?'badge-red':'badge-gray';
-        det+=`<span class="det-b ${cl}">${c.name.replace('Parcours','P')} ${v===0?'PAR':(v>0?'+':'')+v}</span>`;}
+        if(matches.length){
+          const v=matches[0].diff;const t=matches[0].time||0;
+          const cl=v<0?'badge-green':v>0?'badge-red':'badge-gray';
+          det+=`<span class="det-b ${cl}">${c.name.replace('Parcours','P')} ${v===0?'PAR':(v>0?'+':'')+v} ${fmtTTotal(t)}</span>`;
+        }
       });
     }
     det+='</div>';
-    html+=`<tr><td><span class="rpos ${pos}">${em||(i+1)}</span></td><td style="font-weight:500">${p}</td><td><span class="sc ${sc}">${ss}</span></td><td>${det}</td></tr>`;
+    html+=`<tr>
+      <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
+      <td style="font-weight:500">${p}</td>
+      <td><span class="sc ${sc}">${ss}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-600)">${fmtTTotal(d.totalTime)}</td>
+      <td>${det}</td>
+    </tr>`;
   });
   return html+'</tbody></table>';
 }
@@ -1006,19 +1096,19 @@ function renderClassement(){
     if(!sd||!sd.courseResults||!sd.courseResults.length){el.innerHTML='<div class="empty-state">Aucun résultat pour cette séance</div>';return;}
     const ps=buildPlayerScores(sd.courseResults,sd.teams);
     const ranked=Object.entries(ps).sort(([_a,a],[_b,b])=>a.total-b.total);
-    let html=`<div class="card"><div class="card-title">🏆 Individuel — Séance ${S.currentSeance}</div>${renderRankTable(ranked,cd,false)}</div>`;
+    let html=`<div class="card"><div class="card-title">🏆 Individuel — Séance ${S.currentSeance}</div>${renderRankTable(ranked,false)}</div>`;
     // Team ranking for this seance
     const ts={};
-    sd.courseResults.forEach(r=>{const team=sd.teams[r.teamIdx];if(!team)return;const diff=r.par?r.score-r.par:0;if(!ts[r.teamIdx])ts[r.teamIdx]={total:0,team};ts[r.teamIdx].total+=diff;});
+    sd.courseResults.forEach(r=>{const team=sd.teams[r.teamIdx];if(!team)return;const diff=r.par?r.score-r.par:0;const t=r.time||0;if(!ts[r.teamIdx])ts[r.teamIdx]={total:0,totalTime:0,team};ts[r.teamIdx].total+=diff;ts[r.teamIdx].totalTime+=t;});
     const rt=Object.entries(ts).sort(([_a,a],[_b,b])=>a.total-b.total);
     if(rt.length){
       html+=`<div class="card" style="margin-top:12px"><div class="card-title">👥 Équipes — Séance ${S.currentSeance}</div>
-        <table class="rank-table"><thead><tr><th>#</th><th>Équipe</th><th>Total</th></tr></thead><tbody>`;
+        <table class="rank-table"><thead><tr><th>#</th><th>Équipe</th><th>Coups</th><th>⏱ Temps</th></tr></thead><tbody>`;
       rt.forEach(([ti,d],i)=>{
         const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
         const sc=d.total<0?'sc-u':d.total>0?'sc-o':'sc-p';
         const ss=d.total===0?'PAR':(d.total>0?'+':'')+d.total;
-        html+=`<tr><td><span class="rpos ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${em||(i+1)}</span></td><td>Éq.${parseInt(ti)+1} — ${d.team.join(' & ')}</td><td><span class="sc ${sc}">${ss}</span></td></tr>`;
+        html+=`<tr><td><span class="rpos ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${em||(i+1)}</span></td><td>Éq.${parseInt(ti)+1} — ${d.team.join(' & ')}</td><td><span class="sc ${sc}">${ss}</span></td><td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-600)">${fmtTTotal(d.totalTime)}</td></tr>`;
       });
       html+='</tbody></table></div>';
     }
@@ -1054,21 +1144,22 @@ function renderClassement(){
 
     let html=`<div class="card"><div class="card-title">🌍 Classement général — toutes séances cumulées</div>`;
     if(!ranked.length){html+='<div class="empty-state">Aucun résultat</div></div>';el.innerHTML=html;return;}
-    html+=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Total</th>`;
-    activeSeances.forEach(s=>{html+=`<th>S${s}</th>`;});
+    html+=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Coups</th><th>⏱ Total</th>`;
+    activeSeances.forEach(s=>{html+=`<th>S${s} coups</th><th>S${s} temps</th>`;});
     html+=`</tr></thead><tbody>`;
     ranked.forEach(([p,d],i)=>{
       const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
       const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
       const sc=d.total<0?'sc-u':d.total>0?'sc-o':'sc-p';
       const ss=d.total===0?'PAR':(d.total>0?'+':'')+d.total;
-      html+=`<tr><td><span class="rpos ${pos}">${em||(i+1)}</span></td><td style="font-weight:500">${p}</td><td><span class="sc ${sc}">${ss}</span></td>`;
+      html+=`<tr><td><span class="rpos ${pos}">${em||(i+1)}</span></td><td style="font-weight:500">${p}</td><td><span class="sc ${sc}">${ss}</span></td><td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-600)">${fmtTTotal(d.totalTime)}</td>`;
       activeSeances.forEach(s=>{
         const spd=perSeance[s]&&perSeance[s][p];
         const sv=spd?spd.total:null;
+        const st=spd?spd.totalTime:null;
         const scl=sv===null?'sc-p':sv<0?'sc-u':sv>0?'sc-o':'sc-p';
         const svs=sv===null?'—':sv===0?'PAR':(sv>0?'+':'')+sv;
-        html+=`<td><span class="sc ${scl}" style="font-size:12px">${svs}</span></td>`;
+        html+=`<td><span class="sc ${scl}" style="font-size:12px">${svs}</span></td><td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gray-600)">${st?fmtTTotal(st):'—'}</td>`;
       });
       html+=`</tr>`;
     });
