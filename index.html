@@ -683,7 +683,7 @@ function makePoolChip(name){
     // Select this player
     selectedPlayer=name;
     chip.classList.add('player-chip-selected');
-    toast(name+' — appuyez sur un autre joueur');
+    showSelectionBar(name);
   });
   return chip;
 }
@@ -691,6 +691,33 @@ function makePoolChip(name){
 function clearSelection(){
   selectedPlayer=null;
   document.querySelectorAll('.player-chip-selected').forEach(c=>c.classList.remove('player-chip-selected'));
+  const bar=document.getElementById('selectionBar');
+  if(bar)bar.remove();
+}
+
+function showSelectionBar(name){
+  const bar=document.getElementById('selectionBar');
+  if(bar)bar.remove();
+  const el=document.createElement('div');
+  el.id='selectionBar';
+  el.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--green-light);border-radius:8px;margin-top:8px;flex-wrap:wrap;';
+  el.innerHTML='<span style="font-size:12px;color:var(--green-dark);font-weight:500">'+name+' sélectionné</span>'
+    +'<button class="btn btn-primary btn-sm" id="soloOneBtn">👤 Joue seul</button>'
+    +'<button class="btn btn-secondary btn-sm" id="cancelSelBtn">✕ Annuler</button>';
+  document.getElementById('dragPool').after(el);
+  document.getElementById('soloOneBtn').addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    const n=selectedPlayer;
+    clearSelection();
+    const sd=SD();if(!sd)return;
+    sd.teams.push([n]);
+    renderEquipes();save();
+    toast(n+' joue seul');
+  });
+  document.getElementById('cancelSelBtn').addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    clearSelection();
+  });
 }
 
 
