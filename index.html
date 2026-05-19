@@ -71,6 +71,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .team-card-over{border:2px dashed var(--green) !important;background:var(--green-light) !important;}
 .pool-over{border-color:var(--green) !important;background:var(--green-light) !important;}
 .player-chip-selected{border-color:var(--green) !important;background:var(--green-light) !important;box-shadow:0 0 0 2px var(--green);color:var(--green-dark) !important;}
+.drag-player,.team-chip,.team-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 .drag-ghost{position:fixed;pointer-events:none;z-index:9999;padding:6px 14px;background:var(--green-dark);color:#fff;border-radius:20px;font-size:13px;font-weight:500;opacity:.85;transform:translate(-50%,-50%);white-space:nowrap;}
 .drag-ghost{position:fixed;pointer-events:none;z-index:9999;padding:6px 14px;background:var(--green-dark);color:#fff;border-radius:20px;font-size:13px;font-weight:500;opacity:.85;transform:translate(-50%,-50%);white-space:nowrap;}
 
@@ -691,104 +692,45 @@ function mkPlayerChip(name, zone, teamIdx, colors){
     c.ondrop=e=>{e.preventDefault();c.classList.remove('over');if(name!==dragName)pairPlayers(dragName,name);};
   }
 
-  // Tap / click
-  c.addEventListener('click',e=>{
+  // Block context menu (long press on tablet)
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+
+  function handleTap(e){
     e.stopPropagation();
     if(zone==='team'){
-      // Click on team member = remove
       removeFromTeam(name);
       return;
     }
-    // Pool chip: select or pair
     if(selectedChip===name){
-      // deselect
       selectedChip=null;
       clearChipSelection();
       return;
     }
     if(selectedChip){
-      // pair selectedChip with this chip
       const first=selectedChip;
       selectedChip=null;
       clearChipSelection();
       pairPlayers(first,name);
       return;
     }
-    // First tap: select
     selectedChip=name;
     c.classList.add('player-chip-selected');
-    toast(name+' sélectionné — touchez un autre joueur ou une équipe');
-  });
+    toast(name+' sélectionné — appuyez sur un autre joueur');
+  }
+
+  // touchend fires on tap without triggering context menu
+  let touchMoved=false;
+  c.addEventListener('touchstart',e=>{touchMoved=false;},{passive:true});
+  c.addEventListener('touchmove',e=>{touchMoved=true;},{passive:true});
+  c.addEventListener('touchend',e=>{
+    if(!touchMoved){e.preventDefault();handleTap(e);}
+  },{passive:false});
+  // Mouse click fallback
+  c.addEventListener('click',e=>{handleTap(e);});
 
   return c;
 }
 
-// ── Touch drag-and-drop ──
-let touchGhost=null,touchDragName=null;
-function addTouchDrag(el,name){
-  el.addEventListener('touchstart',e=>{
-    if(name==='__pool__')return; // pool is a drop target only
-    e.preventDefault();
-    touchDragName=dragName=name;
-    touchGhost=document.createElement('div');
-    touchGhost.className='drag-ghost';
-    touchGhost.textContent=name;
-    document.body.appendChild(touchGhost);
-    const t=e.touches[0];
-    touchGhost.style.left=t.clientX+'px';touchGhost.style.top=t.clientY+'px';
-  },{passive:false});
-  el.addEventListener('touchmove',e=>{
-    if(!touchDragName)return;
-    e.preventDefault();
-    const t=e.touches[0];
-    if(touchGhost){touchGhost.style.left=t.clientX+'px';touchGhost.style.top=t.clientY+'px';}
-    document.querySelectorAll('.drag-player,.team-card,.drag-pool').forEach(x=>x.classList.remove('over','team-card-over','pool-over'));
-    const under=document.elementFromPoint(t.clientX,t.clientY);if(!under)return;
-    const chip=under.closest('.drag-player');
-    const card=under.closest('.team-card');
-    const pool=under.closest('.drag-pool');
-    if(chip&&chip.dataset.name!==touchDragName)chip.classList.add('over');
-    else if(card)card.classList.add('team-card-over');
-    else if(pool)pool.classList.add('pool-over');
-  },{passive:false});
-  el.addEventListener('touchend',e=>{
-    if(!touchDragName)return;
-    e.preventDefault();
-    if(touchGhost){touchGhost.remove();touchGhost=null;}
-    document.querySelectorAll('.drag-player,.team-card,.drag-pool').forEach(x=>x.classList.remove('over','team-card-over','pool-over'));
-    const t=e.changedTouches[0];
-    const under=document.elementFromPoint(t.clientX,t.clientY);
-    const dn=touchDragName;touchDragName=null;dragName=null;
-    if(!under||!dn)return;
-    const chip=under.closest('.drag-player');
-    const card=under.closest('.team-card');
-    const pool=under.closest('.drag-pool');
-    if(chip&&chip.dataset.name&&chip.dataset.name!==dn){
-      pairPlayers(dn,chip.dataset.name);
-    } else if(card){
-      const s=SD();if(!s)return;
-      const ti=Array.from(document.querySelectorAll('.team-card')).indexOf(card);
-      if(ti>=0&&s.teams[ti]&&!s.teams[ti].includes(dn)){
-        if(s.teams[ti].length)pairPlayers(dn,s.teams[ti][0]);
-        else{s.teams.push([dn]);renderEquipes();save();}
-      }
-    } else if(pool){
-      const s=SD();if(!s)return;
-      if(s.teams.some(t=>t.includes(dn))){removeFromTeam(dn);toast(dn+' remis dans le pool');}
-    }
-  },{passive:false});
-}
-
-function mkDragChip(n){
-  const c=document.createElement('div');c.className='drag-player';c.textContent=n;c.draggable=true;c.dataset.name=n;
-  c.addEventListener('dragstart',e=>{dragName=n;c.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
-  c.addEventListener('dragend',()=>{c.classList.remove('dragging');document.querySelectorAll('.drag-player').forEach(x=>x.classList.remove('over'));});
-  c.addEventListener('dragover',e=>{e.preventDefault();if(c.dataset.name!==dragName)c.classList.add('over');});
-  c.addEventListener('dragleave',()=>c.classList.remove('over'));
-  c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('over');if(c.dataset.name!==dragName)pairPlayers(dragName,c.dataset.name);});
-  addTouchDrag(c,n);
-  return c;
-}
 
 function pairPlayers(a,b){
   const sd=SD();
