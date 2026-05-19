@@ -563,27 +563,17 @@ function renderPlayers(){
 
 // ======== ÉQUIPES ========
 let dragName=null;
-// Pool drag listeners set up once
-(function(){
-  const pool=document.getElementById('dragPool');
-  pool.addEventListener('dragover',e=>{
-    e.preventDefault();
-    const sd2=SD();if(!sd2)return;
-    if(sd2.teams.some(t=>t.includes(dragName)))pool.classList.add('pool-over');
-  });
-  pool.addEventListener('dragleave',e=>{if(!pool.contains(e.relatedTarget))pool.classList.remove('pool-over');});
-  pool.addEventListener('drop',e=>{
-    e.preventDefault();pool.classList.remove('pool-over');
-    if(!dragName)return;
-    const sd2=SD();if(!sd2)return;
-    if(sd2.teams.some(t=>t.includes(dragName))){removeFromTeam(dragName);toast(dragName+' remis dans le pool');}
-  });
-})();
-
+let _poolListenersAdded=false;
 function renderEquipes(){
   const cd=CD();const sd=SD();
   const pool=document.getElementById('dragPool');const grid=document.getElementById('teamsGrid');
   pool.innerHTML='';grid.innerHTML='';
+  if(!_poolListenersAdded){
+    _poolListenersAdded=true;
+    pool.addEventListener('dragover',e=>{e.preventDefault();const s=SD();if(s&&dragName&&s.teams.some(t=>t.includes(dragName)))pool.classList.add('pool-over');});
+    pool.addEventListener('dragleave',e=>{if(!pool.contains(e.relatedTarget))pool.classList.remove('pool-over');});
+    pool.addEventListener('drop',e=>{e.preventDefault();pool.classList.remove('pool-over');if(!dragName)return;const s=SD();if(!s)return;if(s.teams.some(t=>t.includes(dragName))){removeFromTeam(dragName);toast(dragName+' remis dans le pool');}});
+  }
   if(!cd||!cd.players.length){
     pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Ajoutez des joueurs (onglet Joueurs)</div>';
     grid.innerHTML='<div class="empty-state">Aucune équipe</div>';return;
@@ -639,6 +629,62 @@ function renderEquipes(){
     });
     grid.appendChild(tc);
   });
+}
+
+// ── Touch drag-and-drop ──
+let touchGhost=null,touchDragName=null;
+function addTouchDrag(el,name){
+  el.addEventListener('touchstart',e=>{
+    if(name==='__pool__')return; // pool is a drop target only
+    e.preventDefault();
+    touchDragName=dragName=name;
+    touchGhost=document.createElement('div');
+    touchGhost.className='drag-ghost';
+    touchGhost.textContent=name;
+    document.body.appendChild(touchGhost);
+    const t=e.touches[0];
+    touchGhost.style.left=t.clientX+'px';touchGhost.style.top=t.clientY+'px';
+  },{passive:false});
+  el.addEventListener('touchmove',e=>{
+    if(!touchDragName)return;
+    e.preventDefault();
+    const t=e.touches[0];
+    if(touchGhost){touchGhost.style.left=t.clientX+'px';touchGhost.style.top=t.clientY+'px';}
+    document.querySelectorAll('.drag-player,.team-card,.drag-pool').forEach(x=>x.classList.remove('over','team-card-over','pool-over'));
+    const under=document.elementFromPoint(t.clientX,t.clientY);if(!under)return;
+    const chip=under.closest('.drag-player');
+    const card=under.closest('.team-card');
+    const pool=under.closest('.drag-pool');
+    if(chip&&chip.dataset.name!==touchDragName)chip.classList.add('over');
+    else if(card)card.classList.add('team-card-over');
+    else if(pool)pool.classList.add('pool-over');
+  },{passive:false});
+  el.addEventListener('touchend',e=>{
+    if(!touchDragName)return;
+    e.preventDefault();
+    if(touchGhost){touchGhost.remove();touchGhost=null;}
+    document.querySelectorAll('.drag-player,.team-card,.drag-pool').forEach(x=>x.classList.remove('over','team-card-over','pool-over'));
+    const t=e.changedTouches[0];
+    const under=document.elementFromPoint(t.clientX,t.clientY);
+    const dn=touchDragName;touchDragName=null;dragName=null;
+    if(!under||!dn)return;
+    const chip=under.closest('.drag-player');
+    const card=under.closest('.team-card');
+    const pool=under.closest('.drag-pool');
+    if(chip&&chip.dataset.name&&chip.dataset.name!==dn){
+      pairPlayers(dn,chip.dataset.name);
+    } else if(card){
+      const s=SD();if(!s)return;
+      const ti=Array.from(document.querySelectorAll('.team-card')).indexOf(card);
+      if(ti>=0&&s.teams[ti]&&!s.teams[ti].includes(dn)){
+        if(s.teams[ti].length)pairPlayers(dn,s.teams[ti][0]);
+        else{s.teams.push([dn]);renderEquipes();save();}
+      }
+    } else if(pool){
+      const s=SD();if(!s)return;
+      if(s.teams.some(t=>t.includes(dn))){removeFromTeam(dn);toast(dn+' remis dans le pool');}
+    }
+  },{passive:false});
 }
 
 function mkDragChip(n){
