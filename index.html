@@ -115,6 +115,22 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .team-info-par{font-size:10px;color:var(--gray-400)}
 .tctrl{display:flex;gap:4px;align-items:center;flex-shrink:0}
 
+/* Course color palette (header banners) */
+.course-hdr-0{background:#fde8e8;border-bottom:3px solid #e74c3c;}
+.course-hdr-1{background:#e8f0fd;border-bottom:3px solid #3498db;}
+.course-hdr-2{background:#e8fdf0;border-bottom:3px solid #27ae60;}
+.course-hdr-3{background:#fdf6e8;border-bottom:3px solid #f39c12;}
+.course-hdr-4{background:#f3e8fd;border-bottom:3px solid #9b59b6;}
+.course-hdr-5{background:#e8fdfb;border-bottom:3px solid #1abc9c;}
+.course-hdr-6{background:#fdf0e8;border-bottom:3px solid #e67e22;}
+.course-hdr-7{background:#e8edf2;border-bottom:3px solid #2c3e50;}
+.chdr-name{font-size:14px;font-weight:800;letter-spacing:-.3px}
+.chdr-dist{font-size:11px;font-family:'DM Mono',monospace;opacity:.7;margin-top:2px}
+/* Séparateur "Terminé" */
+.done-sep{font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;padding:6px 0 2px 2px;margin-top:4px;border-top:1px dashed var(--gray-200);}
+.team-row.done{opacity:.6;}
+.team-row.done .team-info-name{text-decoration:line-through;text-decoration-color:var(--gray-400);}
+
 /* Team color palette */
 .tc0{background:#e74c3c}.tb0{background:#fff5f5}
 .tc1{background:#3498db}.tb1{background:#f0f7ff}
@@ -973,50 +989,87 @@ function renderParcours(){
   if(!cd||!sd){lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Sélectionnez une classe</div>';return;}
   const courses=getActiveCourses();
   if(!courses.length){
-    lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Ajoutez des parcours dans la bibliothèque et sélectionnez-les pour cette séance</div>';return;
+    lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Sélectionnez les parcours de la séance (bouton ci-dessus)</div>';return;
   }
   if(!sd.teams||!sd.teams.length){
     lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Constituez des équipes (onglet Équipes)</div>';return;
   }
   lanes.innerHTML='';
-  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50','#c0392b','#8e44ad'];
+  const teamColors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50','#c0392b','#8e44ad'];
+  const courseColorIdx=['0','1','2','3','4','5','6','7','0','1','2','3'];
 
-  courses.forEach(course=>{
-    const cc=document.createElement('div');cc.className='course-card';
-    cc.innerHTML=`<div class="course-hdr">
-      <div><div class="course-name">⛳ ${course.name}</div>
-      <div class="course-dist">${course.distance?course.distance+'m':'Distance non configurée'}</div></div>
-    </div><div class="cta" id="cta${course.id}"></div>`;
+  courses.forEach((course,coursePos)=>{
+    const cci=coursePos%8;
+    const cc=document.createElement('div');
+    cc.className='course-card';
+
+    // Header with course color
+    const hdr=document.createElement('div');
+    hdr.className='course-hdr course-hdr-'+cci;
+    hdr.innerHTML=`<div>
+      <div class="chdr-name">⛳ ${course.name}</div>
+      <div class="chdr-dist">${course.distance?course.distance+' m':'Distance non configurée'}</div>
+    </div>`;
+    cc.appendChild(hdr);
+
+    const cta=document.createElement('div');
+    cta.className='cta';
+    cc.appendChild(cta);
     lanes.appendChild(cc);
-    const cta=cc.querySelector('#cta'+course.id);
 
+    // Split teams: pending vs done
+    const pending=[];
+    const done=[];
     sd.teams.forEach((team,ti)=>{
       if(!team||!team.length)return;
+      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===ti);
+      if(result)done.push({team,ti,result});
+      else pending.push({team,ti});
+    });
+
+    // Render pending teams (active)
+    pending.forEach(({team,ti})=>{
       const ci=ti%10;
       const tname=sd.soloMode?team[0]:`Éq.${ti+1} — ${team.join(' · ')}`;
       const par=calcPar(course,team);
-      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===ti);
-
       const row=document.createElement('div');
       row.className=`team-row tb${ci}`;
-
-      let ctrl='';
-      if(result){
-        const diff=result.par?result.score-result.par:0;
-        ctrl=`<span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${result.score}c ${fmtDiff(result.score,result.par)}</span>
-          <button class="btn-icon" onclick="resetScore(${course.id},${ti})" title="Modifier">✏️</button>`;
-      } else {
-        ctrl=`<button class="btn btn-primary btn-sm" onclick="openScore(${course.id},${ti},${par||0})">📝 Score</button>`;
-      }
-
       row.innerHTML=`<div class="color-strip tc${ci}"></div>
         <div class="team-info">
           <div class="team-info-name">${tname}</div>
           <div class="team-info-par">${par?'Objectif : '+par+' coups':'—'}</div>
         </div>
-        <div class="tctrl">${ctrl}</div>`;
+        <div class="tctrl">
+          <button class="btn btn-primary btn-sm" onclick="openScore(${course.id},${ti},${par||0})">📝 Score</button>
+        </div>`;
       cta.appendChild(row);
     });
+
+    // Render done teams (with separator)
+    if(done.length){
+      const sep=document.createElement('div');
+      sep.className='done-sep';
+      sep.textContent='✓ Terminé ('+done.length+')';
+      cta.appendChild(sep);
+
+      done.forEach(({team,ti,result})=>{
+        const ci=ti%10;
+        const tname=sd.soloMode?team[0]:`Éq.${ti+1} — ${team.join(' · ')}`;
+        const diff=result.par?result.score-result.par:0;
+        const row=document.createElement('div');
+        row.className=`team-row tb${ci} done`;
+        row.innerHTML=`<div class="color-strip tc${ci}"></div>
+          <div class="team-info">
+            <div class="team-info-name">${tname}</div>
+            <div class="team-info-par">${result.score} coups ${fmtDiff(result.score,result.par)}</div>
+          </div>
+          <div class="tctrl">
+            <span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${diff===0?'PAR':(diff>0?'+':'')+diff}</span>
+            <button class="btn-icon" onclick="resetScore(${course.id},${ti})" title="Corriger le score">✏️</button>
+          </div>`;
+        cta.appendChild(row);
+      });
+    }
   });
 }
 
