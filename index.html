@@ -563,11 +563,34 @@ function renderPlayers(){
 
 // ======== ÉQUIPES ========
 let dragName=null;
+// Pool drag listeners set up once
+(function(){
+  const pool=document.getElementById('dragPool');
+  pool.addEventListener('dragover',e=>{
+    e.preventDefault();
+    const sd2=SD();if(!sd2)return;
+    if(sd2.teams.some(t=>t.includes(dragName)))pool.classList.add('pool-over');
+  });
+  pool.addEventListener('dragleave',e=>{if(!pool.contains(e.relatedTarget))pool.classList.remove('pool-over');});
+  pool.addEventListener('drop',e=>{
+    e.preventDefault();pool.classList.remove('pool-over');
+    if(!dragName)return;
+    const sd2=SD();if(!sd2)return;
+    if(sd2.teams.some(t=>t.includes(dragName))){removeFromTeam(dragName);toast(dragName+' remis dans le pool');}
+  });
+})();
+
 function renderEquipes(){
   const cd=CD();const sd=SD();
   const pool=document.getElementById('dragPool');const grid=document.getElementById('teamsGrid');
   pool.innerHTML='';grid.innerHTML='';
-  if(!cd||!cd.players.length){pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Ajoutez des joueurs</div>';grid.innerHTML='<div class="empty-state">Aucune équipe</div>';return;}
+  if(!cd||!cd.players.length){
+    pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Ajoutez des joueurs (onglet Joueurs)</div>';
+    grid.innerHTML='<div class="empty-state">Aucune équipe</div>';return;
+  }
+  if(!sd){
+    pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Sélectionnez une classe</div>';return;
+  }
   const assigned=sd.teams.flat();
   const present=cd.players.filter(p=>!isAbsent(p));
   const unassigned=present.filter(p=>!assigned.includes(p));
@@ -576,23 +599,11 @@ function renderEquipes(){
   if(sd.soloMode){
     pool.innerHTML='<div style="color:var(--green-dark);font-size:12px;font-weight:500">👤 Mode solo actif — chaque joueur joue individuellement</div>';
   } else if(!unassigned.length){
-    pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Tous en équipe</div>';
+    pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Tous les joueurs sont en équipe</div>';
   } else {
     unassigned.forEach(n=>pool.appendChild(mkDragChip(n)));
   }
-  pool.addEventListener('dragover',e=>{
-    e.preventDefault();
-    const sd2=SD();const inTeam=sd2.teams.some(t=>t.includes(dragName));
-    if(inTeam)pool.classList.add('pool-over');
-  });
-  pool.addEventListener('dragleave',e=>{if(!pool.contains(e.relatedTarget))pool.classList.remove('pool-over');});
-  pool.addEventListener('drop',e=>{
-    e.preventDefault();pool.classList.remove('pool-over');
-    if(!dragName)return;
-    const sd2=SD();const inTeam=sd2.teams.some(t=>t.includes(dragName));
-    if(inTeam){removeFromTeam(dragName);toast(dragName+' remis dans le pool');}
-  });
-  if(!sd.teams.length){grid.innerHTML='<div class="empty-state">Glissez les joueurs</div>';return;}
+  if(!sd.teams.length){grid.innerHTML='<div class="empty-state">Glissez un joueur sur un autre pour former une équipe</div>';return;}
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50','#c0392b','#8e44ad'];
   sd.teams.forEach((team,ti)=>{
     const tc=document.createElement('div');tc.className='team-card';
