@@ -845,25 +845,35 @@ function renderActiveCfg(){
   const sd=SD();const lib=GC();
   const el=document.getElementById('activeCfgArea');
   if(!sd){el.innerHTML='<div class="empty-state">Sélectionnez une classe</div>';return;}
-  if(!lib.length){el.innerHTML='<div class="empty-state">Créez des parcours dans la bibliothèque dabord</div>';return;}
+  if(!lib.length){el.innerHTML='<div class="empty-state">Créez des parcours dans la bibliothèque</div>';return;}
   const active=sd.activeCourseIds||[];
   let html=`<div style="font-size:12px;color:var(--gray-600);margin-bottom:10px">
-    Cochez les parcours utilisés pour la <strong>séance ${S.currentSeance}</strong>. Seuls ces parcours seront proposés lors de l'assignation des équipes. Si aucun n'est coché, tous sont disponibles.
-  </div><div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    Cochez les parcours de la <strong>séance ${S.currentSeance}</strong>. Toutes les équipes apparaîtront automatiquement sur chaque parcours coché.
+  </div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">`;
   lib.forEach(c=>{
     const on=active.includes(c.id);
     html+=`<button onclick="toggleActiveCourse(${c.id})"
-      style="padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;
+      style="padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;
              border:2px solid ${on?'var(--green)':'var(--gray-200)'};
-             background:${on?'var(--green-light)':'var(--white)'};
-             color:${on?'var(--green-dark)':'var(--gray-600)'};transition:all .15s">
-      ${on?'✓ ':''}${c.name}${c.distance?' ('+c.distance+'m)':''}
+             background:${on?'var(--green)':'var(--white)'};
+             color:${on?'#fff':'var(--gray-600)'};transition:all .15s">
+      ${on?'✓ ':''}${c.name}${c.distance?' · '+c.distance+'m':''}
     </button>`;
   });
-  html+=`</div><div style="margin-top:10px;font-size:12px;color:var(--gray-400)">
-    ${active.length?active.length+' parcours sélectionné(s) pour cette séance':'Aucun coché — tous disponibles par défaut'}
+  html+=`</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span style="font-size:12px;color:var(--gray-400)">${active.length?active.length+' parcours sélectionné(s)':'Aucun coché — tous seront affichés'}</span>
+    <button class="btn btn-primary btn-sm" onclick="validateActiveCourses()">✅ Valider</button>
   </div>`;
   el.innerHTML=html;
+}
+
+function validateActiveCourses(){
+  renderParcours();
+  // Close the panel
+  document.getElementById('activeCfgArea').style.display='none';
+  document.getElementById('toggleActive').textContent='📋 Parcours de la séance';
+  toast('Parcours mis à jour !');
 }
 
 function toggleActiveCourse(id){
@@ -871,7 +881,7 @@ function toggleActiveCourse(id){
   if(!sd.activeCourseIds)sd.activeCourseIds=[];
   if(sd.activeCourseIds.includes(id))sd.activeCourseIds=sd.activeCourseIds.filter(x=>x!==id);
   else sd.activeCourseIds.push(id);
-  save();renderActiveCfg();
+  save();renderActiveCfg();renderParcours();
 }
 
 function getActiveCourses(){
