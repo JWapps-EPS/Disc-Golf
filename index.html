@@ -254,16 +254,15 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     <div class="flex-between">
       <div class="card-title" style="margin-bottom:0">Configuration & assignation</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" id="toggleConfig" onclick="toggleCfg()">▼ Bibliothèque</button>
+        <button class="btn btn-secondary btn-sm" id="toggleConfig" onclick="toggleCfg()">▼ Bibliothèque parcours</button>
         <button class="btn btn-secondary btn-sm" id="toggleActive" onclick="toggleActiveCfg()">📋 Parcours de la séance</button>
-        <button class="btn btn-primary btn-sm" onclick="openAddTeam()">+ Équipe sur parcours</button>
       </div>
     </div>
     <div id="cfgArea" style="display:none;margin-top:12px"></div>
     <div id="activeCfgArea" style="display:none;margin-top:12px"></div>
   </div>
   <div class="parcours-grid" id="courseLanes">
-    <div class="empty-state" style="grid-column:1/-1">Configurez les parcours et assignez des équipes</div>
+    <div class="empty-state" style="grid-column:1/-1">Configurez les parcours et constituez des équipes</div>
   </div>
 </div>
 
@@ -306,25 +305,6 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-secondary btn-sm" onclick="closeMo('moScore')">Annuler</button>
       <button class="btn btn-primary btn-sm" onclick="confirmScore()">✅ Valider</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL ajouter équipe -->
-<div class="mo" id="moAddTeam">
-  <div class="md">
-    <div class="md-title">Ajouter équipe au parcours</div>
-    <div class="form-group" style="margin-bottom:10px">
-      <label>Équipe</label>
-      <select id="selTeam" class="form-select" style="width:100%"></select>
-    </div>
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Parcours</label>
-      <select id="selCourse" class="form-select" style="width:100%"></select>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-secondary btn-sm" onclick="closeMo('moAddTeam')">Annuler</button>
-      <button class="btn btn-primary btn-sm" onclick="confirmAddTeam()">Ajouter</button>
     </div>
   </div>
 </div>
@@ -981,57 +961,55 @@ function renderParcours(){
   const cd=CD();const sd=SD();
   const lanes=document.getElementById('courseLanes');
   if(!cd||!sd){lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Sélectionnez une classe</div>';return;}
-  if(!sd.courseAssignments||!sd.courseAssignments.length){
-    lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Ajoutez des équipes sur les parcours</div>';return;
+  const courses=getActiveCourses();
+  if(!courses.length){
+    lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Ajoutez des parcours dans la bibliothèque et sélectionnez-les pour cette séance</div>';return;
+  }
+  if(!sd.teams||!sd.teams.length){
+    lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Constituez des équipes (onglet Équipes)</div>';return;
   }
   lanes.innerHTML='';
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50','#c0392b','#8e44ad'];
 
-  const usedCourseIds=[...new Set(sd.courseAssignments.map(a=>a.courseId))];
-  usedCourseIds.forEach(cid=>{
-    const course=findCourse(cid);if(!course)return;
-    const assigned=sd.courseAssignments.filter(a=>a.courseId===cid);
-
+  courses.forEach(course=>{
     const cc=document.createElement('div');cc.className='course-card';
     cc.innerHTML=`<div class="course-hdr">
       <div><div class="course-name">⛳ ${course.name}</div>
       <div class="course-dist">${course.distance?course.distance+'m':'Distance non configurée'}</div></div>
-      <button class="btn btn-secondary btn-xs" onclick="openAddTeamId(${course.id})">+ Équipe</button>
     </div><div class="cta" id="cta${course.id}"></div>`;
     lanes.appendChild(cc);
     const cta=cc.querySelector('#cta'+course.id);
 
-    assigned.forEach((a,ai)=>{
-      const ci=a.colorIdx!==undefined?a.colorIdx:ai;
-      const team=sd.teams[a.teamIdx];if(!team)return;
-      const tname=sd.soloMode?team[0]:`Éq.${a.teamIdx+1} — ${team.join(' · ')}`;
+    sd.teams.forEach((team,ti)=>{
+      if(!team||!team.length)return;
+      const ci=ti%10;
+      const tname=sd.soloMode?team[0]:`Éq.${ti+1} — ${team.join(' · ')}`;
       const par=calcPar(course,team);
-      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===a.teamIdx);
+      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===ti);
 
       const row=document.createElement('div');
-      row.className=`team-row tb${ci%10}`;
+      row.className=`team-row tb${ci}`;
 
       let ctrl='';
       if(result){
         const diff=result.par?result.score-result.par:0;
         ctrl=`<span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${result.score}c ${fmtDiff(result.score,result.par)}</span>
-          <button class="btn-icon" onclick="resetScore(${course.id},${a.teamIdx})" title="Modifier le score">✏️</button>`;
+          <button class="btn-icon" onclick="resetScore(${course.id},${ti})" title="Modifier">✏️</button>`;
       } else {
-        ctrl=`<button class="btn btn-primary btn-sm" onclick="openScore(${course.id},${a.teamIdx},${par||0})">📝 Entrer score</button>`;
+        ctrl=`<button class="btn btn-primary btn-sm" onclick="openScore(${course.id},${ti},${par||0})">📝 Score</button>`;
       }
 
-      row.innerHTML=`<div class="color-strip tc${ci%10}"></div>
+      row.innerHTML=`<div class="color-strip tc${ci}"></div>
         <div class="team-info">
           <div class="team-info-name">${tname}</div>
           <div class="team-info-par">${par?'Objectif : '+par+' coups':'—'}</div>
         </div>
-        <div class="tctrl">
-          ${ctrl}
-          <button class="btn-icon" onclick="removeFromCourse(${course.id},${a.teamIdx})" title="Retirer">✕</button>
-        </div>`;
+        <div class="tctrl">${ctrl}</div>`;
       cta.appendChild(row);
     });
   });
 }
+
 
 let scoreCtx=null;
 function openScore(courseId,teamIdx,par){
@@ -1062,7 +1040,6 @@ function confirmScore(){
   toast(`${val} coups — ${diff===0?'PAR':diff>0?'+'+diff:diff}`);
 }
 
-function openAddTeam(){openAddTeamId(null);}
 function openAddTeamId(courseId){
   const cd=CD();const sd=SD();
   if(!cd||!sd)return toast('Sélectionnez une classe');
@@ -1078,20 +1055,6 @@ function openAddTeamId(courseId){
   if(!avail.length)return toast('Aucun parcours dans la bibliothèque');
   avail.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.distance?` (${c.distance}m)`:'');if(courseId&&c.id===courseId)o.selected=true;cs.appendChild(o);});
   openMo('moAddTeam');
-}
-
-function confirmAddTeam(){
-  const sd=SD();
-  const ti=parseInt(document.getElementById('selTeam').value);
-  const cid=parseInt(document.getElementById('selCourse').value);
-  const ex=sd.courseAssignments.filter(a=>a.courseId===cid);
-  sd.courseAssignments.push({courseId:cid,teamIdx:ti,colorIdx:ex.length});
-  save();closeMo('moAddTeam');renderParcours();toast('Équipe assignée !');
-}
-
-function removeFromCourse(cid,ti){
-  const sd=SD();sd.courseAssignments=sd.courseAssignments.filter(a=>!(a.courseId===cid&&a.teamIdx===ti));
-  save();renderParcours();
 }
 
 // ======== CLASSEMENT ========
