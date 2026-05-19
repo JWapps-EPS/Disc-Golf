@@ -1022,7 +1022,7 @@ function renderParcours(){
     const done=[];
     sd.teams.forEach((team,ti)=>{
       if(!team||!team.length)return;
-      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===ti);
+      const result=sd.courseResults.find(r=>r.courseId==course.id&&r.teamIdx==ti);
       if(result)done.push({team,ti,result});
       else pending.push({team,ti});
     });
@@ -1076,6 +1076,7 @@ function renderParcours(){
 
 let scoreCtx=null;
 function openScore(courseId,teamIdx,par){
+  courseId=parseInt(courseId);teamIdx=parseInt(teamIdx);
   const sd=SD();
   const team=sd.teams[teamIdx];
   const course=findCourse(courseId);
@@ -1089,6 +1090,7 @@ function openScore(courseId,teamIdx,par){
 }
 
 function resetScore(courseId,teamIdx){
+  courseId=parseInt(courseId);teamIdx=parseInt(teamIdx);
   const sd=SD();
   sd.courseResults=sd.courseResults.filter(r=>!(r.courseId===courseId&&r.teamIdx===teamIdx));
   save();renderParcours();
