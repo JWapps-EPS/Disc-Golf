@@ -565,58 +565,49 @@ function renderPlayers(){
 }
 
 // ======== ÉQUIPES ========
-let dragName=null;
-let selectedChip=null; // for tap-to-pair on touch
+let selectedPlayer=null;
 
 function renderEquipes(){
-  const cd=CD();const sd=SD();
+  const cd=CD();
+  const sd=SD();
   const pool=document.getElementById('dragPool');
   const grid=document.getElementById('teamsGrid');
   pool.innerHTML='';
   grid.innerHTML='';
 
-  // Update solo button
+  // Solo button state
   const sb=document.getElementById('soloBtn');
   if(sb)sb.className='btn btn-sm '+(sd&&sd.soloMode?'btn-primary':'btn-secondary');
 
   if(!cd||!cd.players.length){
-    pool.innerHTML=`<div style="color:var(--gray-400);font-size:13px;padding:8px">Ajoutez des joueurs dans l'onglet Joueurs</div>`;
+    pool.innerHTML='<p style="color:var(--gray-400);padding:10px;font-size:13px">Ajoutez des joueurs dans l\'onglet Joueurs</p>';
     grid.innerHTML='<div class="empty-state">Aucune équipe</div>';
     return;
   }
   if(!sd){
-    pool.innerHTML='<div style="color:var(--gray-400);font-size:13px;padding:8px">Sélectionnez une classe</div>';
+    pool.innerHTML='<p style="color:var(--gray-400);padding:10px">Sélectionnez une classe</p>';
     return;
   }
 
   if(sd.soloMode){
-    pool.innerHTML='<div style="color:var(--green-dark);font-size:12px;font-weight:500;padding:8px">👤 Mode solo actif</div>';
+    pool.innerHTML='<p style="color:var(--green-dark);font-size:12px;font-weight:500;padding:8px">👤 Mode solo actif</p>';
   } else {
     const assigned=sd.teams.flat();
     const present=cd.players.filter(p=>!isAbsent(p));
     const unassigned=present.filter(p=>!assigned.includes(p));
     if(!unassigned.length){
-      pool.innerHTML='<div style="color:var(--gray-400);font-size:12px;padding:8px">Tous les joueurs sont en équipe</div>';
+      pool.innerHTML='<p style="color:var(--gray-400);padding:10px;font-size:12px">Tous les joueurs sont en équipe</p>';
     } else {
-      unassigned.forEach(n=>pool.appendChild(mkPlayerChip(n,'pool')));
+      unassigned.forEach(n=>{
+        const chip=makePoolChip(n);
+        pool.appendChild(chip);
+      });
     }
   }
 
-  // Pool drop target (mouse)
-  pool.ondragover=e=>{e.preventDefault();pool.classList.add('pool-over');};
-  pool.ondragleave=e=>{if(!pool.contains(e.relatedTarget))pool.classList.remove('pool-over');};
-  pool.ondrop=e=>{
-    e.preventDefault();pool.classList.remove('pool-over');
-    if(!dragName)return;
-    const s=SD();if(!s)return;
-    if(s.teams.some(t=>t.includes(dragName))){removeFromTeam(dragName);toast(dragName+' remis dans le pool');}
-  };
-
   // Teams grid
   if(!sd.teams||!sd.teams.length){
-    grid.innerHTML='<div class="empty-state">'+
-      (sd.soloMode?'Mode solo : chaque élève joue seul':'Appuyez sur un joueur puis sur un autre pour former une équipe')+
-      '</div>';
+    grid.innerHTML='<div class="empty-state">Appuyez sur deux joueurs pour former une équipe</div>';
     return;
   }
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50','#c0392b','#8e44ad'];
@@ -624,111 +615,82 @@ function renderEquipes(){
     const tc=document.createElement('div');
     tc.className='team-card';
     tc.style.borderTop='3px solid '+colors[ti%colors.length];
+
     const hdr=document.createElement('div');
     hdr.className='team-card-hdr';
     hdr.textContent='Équipe '+(ti+1)+' · '+team.length+' joueur'+(team.length>1?'s':'');
+    tc.appendChild(hdr);
+
     const members=document.createElement('div');
     members.className='team-members';
-    members.id='tm'+ti;
-    tc.appendChild(hdr);tc.appendChild(members);
     team.forEach(p=>{
-      members.appendChild(mkPlayerChip(p,'team',ti,colors));
+      const chip=document.createElement('div');
+      chip.className='team-chip';
+      chip.textContent=p+' ✕';
+      chip.style.background=colors[ti%colors.length]+'22';
+      chip.style.color=colors[ti%colors.length];
+      chip.style.borderColor=colors[ti%colors.length]+'55';
+      chip.style.border='1.5px solid';
+      chip.style.cursor='pointer';
+      chip.style.webkitUserSelect='none';
+      chip.style.userSelect='none';
+      chip.addEventListener('pointerdown',e=>{e.preventDefault();removeFromTeam(p);});
+      members.appendChild(chip);
     });
-    // Drop target (mouse)
-    tc.ondragover=e=>{
+    tc.appendChild(members);
+
+    // Tap on team card to add selected player
+    tc.addEventListener('pointerdown',e=>{
+      if(e.target.classList.contains('team-chip'))return; // handled above
+      if(!selectedPlayer)return;
       e.preventDefault();
-      if(!sd.teams[ti]||!sd.teams[ti].includes(dragName))tc.classList.add('team-card-over');
-    };
-    tc.ondragleave=()=>tc.classList.remove('team-card-over');
-    tc.ondrop=e=>{
-      e.preventDefault();tc.classList.remove('team-card-over');
-      if(!dragName)return;
       const s=SD();if(!s)return;
-      if(!s.teams[ti]||s.teams[ti].includes(dragName))return;
-      if(s.teams[ti].length)pairPlayers(dragName,s.teams[ti][0]);
-      else{s.teams.push([dragName]);renderEquipes();save();}
-    };
-    // Tap target
-    tc.addEventListener('click',e=>{
-      if(!selectedChip)return;
-      const n=selectedChip;selectedChip=null;
-      clearChipSelection();
-      const s=SD();if(!s)return;
-      if(!s.teams[ti]||s.teams[ti].includes(n))return;
-      if(s.teams[ti].length)pairPlayers(n,s.teams[ti][0]);
-      else{s.teams.push([n]);renderEquipes();save();}
+      if(s.teams[ti]&&s.teams[ti].includes(selectedPlayer)){clearSelection();return;}
+      if(s.teams[ti]&&s.teams[ti].length)pairPlayers(selectedPlayer,s.teams[ti][0]);
+      else{s.teams.push([selectedPlayer]);renderEquipes();save();}
+      clearSelection();
     });
     grid.appendChild(tc);
   });
 }
 
-function clearChipSelection(){
-  document.querySelectorAll('.player-chip-selected').forEach(c=>c.classList.remove('player-chip-selected'));
-}
+function makePoolChip(name){
+  const chip=document.createElement('div');
+  chip.className='drag-player';
+  chip.textContent=name;
+  chip.style.cursor='pointer';
+  chip.style.webkitUserSelect='none';
+  chip.style.userSelect='none';
+  chip.style.webkitTouchCallout='none';
+  chip.dataset.name=name;
 
-function mkPlayerChip(name, zone, teamIdx, colors){
-  const c=document.createElement('div');
-  c.className=(zone==='pool')?'drag-player':'team-chip';
-  c.textContent=name;
-  c.draggable=true;
-  c.dataset.name=name;
+  chip.addEventListener('contextmenu',e=>e.preventDefault());
 
-  if(zone==='team'&&colors&&teamIdx!==undefined){
-    c.style.background=colors[teamIdx%colors.length]+'22';
-    c.style.color=colors[teamIdx%colors.length];
-    c.style.borderColor=colors[teamIdx%colors.length]+'55';
-    c.style.border='1.5px solid';
-    c.title='Appuyer pour retirer';
-  }
-
-  // Mouse drag
-  c.ondragstart=e=>{dragName=name;c.style.opacity='.4';e.dataTransfer.effectAllowed='move';};
-  c.ondragend=e=>{c.style.opacity='1';document.querySelectorAll('.drag-player,.team-chip').forEach(x=>x.style.opacity='1');};
-
-  // Drop on another chip (pool chips only)
-  if(zone==='pool'){
-    c.ondragover=e=>{e.preventDefault();if(name!==dragName)c.classList.add('over');};
-    c.ondragleave=()=>c.classList.remove('over');
-    c.ondrop=e=>{e.preventDefault();c.classList.remove('over');if(name!==dragName)pairPlayers(dragName,name);};
-  }
-
-  // Block context menu (long press on tablet)
-  c.addEventListener('contextmenu',e=>e.preventDefault());
-
-  function handleTap(e){
-    e.stopPropagation();
-    if(zone==='team'){
-      removeFromTeam(name);
+  chip.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    // Toggle selection
+    if(selectedPlayer===name){
+      clearSelection();
       return;
     }
-    if(selectedChip===name){
-      selectedChip=null;
-      clearChipSelection();
-      return;
-    }
-    if(selectedChip){
-      const first=selectedChip;
-      selectedChip=null;
-      clearChipSelection();
+    if(selectedPlayer){
+      // Pair the two
+      const first=selectedPlayer;
+      clearSelection();
       pairPlayers(first,name);
       return;
     }
-    selectedChip=name;
-    c.classList.add('player-chip-selected');
-    toast(name+' sélectionné — appuyez sur un autre joueur');
-  }
+    // Select this player
+    selectedPlayer=name;
+    chip.classList.add('player-chip-selected');
+    toast(name+' — appuyez sur un autre joueur');
+  });
+  return chip;
+}
 
-  // touchend fires on tap without triggering context menu
-  let touchMoved=false;
-  c.addEventListener('touchstart',e=>{touchMoved=false;},{passive:true});
-  c.addEventListener('touchmove',e=>{touchMoved=true;},{passive:true});
-  c.addEventListener('touchend',e=>{
-    if(!touchMoved){e.preventDefault();handleTap(e);}
-  },{passive:false});
-  // Mouse click fallback
-  c.addEventListener('click',e=>{handleTap(e);});
-
-  return c;
+function clearSelection(){
+  selectedPlayer=null;
+  document.querySelectorAll('.player-chip-selected').forEach(c=>c.classList.remove('player-chip-selected'));
 }
 
 
