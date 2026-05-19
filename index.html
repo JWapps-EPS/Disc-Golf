@@ -70,6 +70,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .teams-grid{display:flex;flex-wrap:wrap;gap:8px}
 .team-card-over{border:2px dashed var(--green) !important;background:var(--green-light) !important;}
 .pool-over{border-color:var(--green) !important;background:var(--green-light) !important;}
+.drag-ghost{position:fixed;pointer-events:none;z-index:9999;padding:6px 14px;background:var(--green-dark);color:#fff;border-radius:20px;font-size:13px;font-weight:500;opacity:.85;transform:translate(-50%,-50%);white-space:nowrap;}
 
 /* DIAGNOSTIQUE */
 .diag-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -109,10 +110,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .team-info{flex:1;min-width:0;padding-left:2px}
 .team-info-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .team-info-par{font-size:10px;color:var(--gray-400)}
-.chrono{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;min-width:52px}
 .tctrl{display:flex;gap:4px;align-items:center;flex-shrink:0}
-.shared-bar{background:var(--green-dark);color:#fff;padding:5px 10px;border-radius:7px;display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px}
-.shared-time{font-family:'DM Mono',monospace;font-size:17px;font-weight:500;min-width:60px}
 
 /* Team color palette */
 .tc0{background:#e74c3c}.tb0{background:#fff5f5}
@@ -211,6 +209,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
         <button class="btn btn-secondary btn-sm" onclick="randomTeams(3)">🎲 Aléatoire ×3</button>
         <button class="btn btn-secondary btn-sm" onclick="rankTeams('snake')" title="1er avec dernier, 2e avec avant-dernier...">🏅 Serpentin</button>
         <button class="btn btn-secondary btn-sm" onclick="rankTeams('block')" title="1er avec 2e, 3e avec 4e...">📊 Par niveau</button>
+        <button class="btn btn-secondary btn-sm" id="soloBtn" onclick="toggleSoloMode()">👤 Solo</button>
         <button class="btn btn-secondary btn-sm" onclick="clearTeams()">🗑</button>
         <button class="btn btn-amber btn-sm" onclick="save();toast('Sauvegardé !')">💾</button>
       </div>
@@ -251,12 +250,14 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
   <div class="card">
     <div class="flex-between">
       <div class="card-title" style="margin-bottom:0">Configuration & assignation</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-secondary btn-sm" id="toggleConfig" onclick="toggleCfg()">▼ Config</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" id="toggleConfig" onclick="toggleCfg()">▼ Bibliothèque</button>
+        <button class="btn btn-secondary btn-sm" id="toggleActive" onclick="toggleActiveCfg()">📋 Parcours de la séance</button>
         <button class="btn btn-primary btn-sm" onclick="openAddTeam()">+ Équipe sur parcours</button>
       </div>
     </div>
     <div id="cfgArea" style="display:none;margin-top:12px"></div>
+    <div id="activeCfgArea" style="display:none;margin-top:12px"></div>
   </div>
   <div class="parcours-grid" id="courseLanes">
     <div class="empty-state" style="grid-column:1/-1">Configurez les parcours et assignez des équipes</div>
@@ -353,9 +354,12 @@ const CD=()=>S.currentClass?S.classes[S.currentClass]:null;
 const SD=()=>{
   const cd=CD();if(!cd)return null;
   const k=S.currentSeance;
-  if(!cd.seances[k])cd.seances[k]={teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}};
-  if(!cd.seances[k].absents)cd.seances[k].absents={};
-  return cd.seances[k];
+  if(!cd.seances[k])cd.seances[k]={teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{},activeCourseIds:[],soloMode:false};
+  const sd=cd.seances[k];
+  if(!sd.absents)sd.absents={};
+  if(!sd.activeCourseIds)sd.activeCourseIds=[];
+  if(sd.soloMode===undefined)sd.soloMode=false;
+  return sd;
 };
 const save=()=>localStorage.setItem('dg3',JSON.stringify(S));
 function load(){
@@ -496,7 +500,7 @@ function newSeance(){
   const cd=CD();if(!cd)return toast('Sélectionnez une classe');
   const nums=Object.keys(cd.seances).map(Number);
   const next=Math.max(...nums)+1;
-  cd.seances[next]={teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}};
+  cd.seances[next]={teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{},activeCourseIds:[],soloMode:false};
   S.currentSeance=next;renderSeanceSel();renderAll();save();toast(`Séance ${next} créée`);
 }
 function switchSeance(){
@@ -567,8 +571,15 @@ function renderEquipes(){
   const assigned=sd.teams.flat();
   const present=cd.players.filter(p=>!isAbsent(p));
   const unassigned=present.filter(p=>!assigned.includes(p));
-  if(!unassigned.length)pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Tous en équipe</div>';
-  else unassigned.forEach(n=>pool.appendChild(mkDragChip(n)));
+  const sb=document.getElementById('soloBtn');
+  if(sb)sb.className='btn btn-sm '+(sd.soloMode?'btn-primary':'btn-secondary');
+  if(sd.soloMode){
+    pool.innerHTML='<div style="color:var(--green-dark);font-size:12px;font-weight:500">👤 Mode solo actif — chaque joueur joue individuellement</div>';
+  } else if(!unassigned.length){
+    pool.innerHTML='<div style="color:var(--gray-400);font-size:12px">Tous en équipe</div>';
+  } else {
+    unassigned.forEach(n=>pool.appendChild(mkDragChip(n)));
+  }
   pool.addEventListener('dragover',e=>{
     e.preventDefault();
     const sd2=SD();const inTeam=sd2.teams.some(t=>t.includes(dragName));
@@ -594,6 +605,7 @@ function renderEquipes(){
       c.draggable=true;c.dataset.name=p;
       c.addEventListener('dragstart',e=>{dragName=p;c.style.opacity='.35';e.dataTransfer.effectAllowed='move';});
       c.addEventListener('dragend',()=>{c.style.opacity='1';document.getElementById('dragPool').classList.remove('pool-over');});
+      addTouchDrag(c,p);
       tc.querySelector(`#tm${ti}`).appendChild(c);
     });
     // Make the whole team card a drop target
@@ -625,6 +637,7 @@ function mkDragChip(n){
   c.addEventListener('dragover',e=>{e.preventDefault();if(c.dataset.name!==dragName)c.classList.add('over');});
   c.addEventListener('dragleave',()=>c.classList.remove('over'));
   c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('over');if(c.dataset.name!==dragName)pairPlayers(dragName,c.dataset.name);});
+  addTouchDrag(c,n);
   return c;
 }
 
@@ -743,6 +756,70 @@ function exportDiag(){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=`diag_${S.currentClass}_S${S.currentSeance}.txt`;a.click();
 }
 
+// ======== MODE SOLO ========
+function toggleSoloMode(){
+  const sd=SD();if(!sd)return toast('Sélectionnez une classe');
+  const cd=CD();
+  sd.soloMode=!sd.soloMode;
+  if(sd.soloMode){
+    const present=cd.players.filter(p=>!isAbsent(p));
+    sd.teams=present.map(p=>[p]);
+    toast('Mode solo activé — chaque joueur joue seul');
+  } else {
+    sd.teams=[];
+    toast('Mode solo désactivé — équipes effacées');
+  }
+  const btn=document.getElementById('soloBtn');
+  if(btn)btn.className='btn btn-sm '+(sd.soloMode?'btn-primary':'btn-secondary');
+  renderEquipes();save();
+}
+
+// ======== PARCOURS ACTIFS PAR SÉANCE ========
+function toggleActiveCfg(){
+  const a=document.getElementById('activeCfgArea');const b=document.getElementById('toggleActive');
+  if(a.style.display==='none'){a.style.display='block';b.textContent='▲ Parcours de la séance';renderActiveCfg();}
+  else{a.style.display='none';b.textContent='📋 Parcours de la séance';}
+}
+
+function renderActiveCfg(){
+  const sd=SD();const lib=GC();
+  const el=document.getElementById('activeCfgArea');
+  if(!sd){el.innerHTML='<div class="empty-state">Sélectionnez une classe</div>';return;}
+  if(!lib.length){el.innerHTML='<div class="empty-state">Créez des parcours dans la bibliothèque dabord</div>';return;}
+  const active=sd.activeCourseIds||[];
+  let html=`<div style="font-size:12px;color:var(--gray-600);margin-bottom:10px">
+    Cochez les parcours utilisés pour la <strong>séance ${S.currentSeance}</strong>. Seuls ces parcours seront proposés lors de l'assignation des équipes. Si aucun n'est coché, tous sont disponibles.
+  </div><div style="display:flex;flex-wrap:wrap;gap:8px">`;
+  lib.forEach(c=>{
+    const on=active.includes(c.id);
+    html+=`<button onclick="toggleActiveCourse(${c.id})"
+      style="padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;
+             border:2px solid ${on?'var(--green)':'var(--gray-200)'};
+             background:${on?'var(--green-light)':'var(--white)'};
+             color:${on?'var(--green-dark)':'var(--gray-600)'};transition:all .15s">
+      ${on?'✓ ':''}${c.name}${c.distance?' ('+c.distance+'m)':''}
+    </button>`;
+  });
+  html+=`</div><div style="margin-top:10px;font-size:12px;color:var(--gray-400)">
+    ${active.length?active.length+' parcours sélectionné(s) pour cette séance':'Aucun coché — tous disponibles par défaut'}
+  </div>`;
+  el.innerHTML=html;
+}
+
+function toggleActiveCourse(id){
+  const sd=SD();if(!sd)return;
+  if(!sd.activeCourseIds)sd.activeCourseIds=[];
+  if(sd.activeCourseIds.includes(id))sd.activeCourseIds=sd.activeCourseIds.filter(x=>x!==id);
+  else sd.activeCourseIds.push(id);
+  save();renderActiveCfg();
+}
+
+function getActiveCourses(){
+  const sd=SD();const lib=GC();
+  if(!sd||!sd.activeCourseIds||!sd.activeCourseIds.length)return lib;
+  return lib.filter(c=>sd.activeCourseIds.includes(c.id));
+}
+
 // ======== PARCOURS ========
 function toggleCfg(){
   const a=document.getElementById('cfgArea');const b=document.getElementById('toggleConfig');
@@ -823,167 +900,84 @@ function fmtDiff(s,p){if(!p)return'';const d=s-p;return d===0?'(PAR)':d<0?`(${d}
 function renderParcours(){
   const cd=CD();const sd=SD();
   const lanes=document.getElementById('courseLanes');
-  // Stop old intervals
-  Object.keys(CIs).forEach(k=>clearInterval(CIs[k]));CIs={};
   if(!cd||!sd){lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Sélectionnez une classe</div>';return;}
   if(!sd.courseAssignments||!sd.courseAssignments.length){
     lanes.innerHTML='<div class="empty-state" style="grid-column:1/-1">Ajoutez des équipes sur les parcours</div>';return;
   }
   lanes.innerHTML='';
 
-  GC().forEach(course=>{
-    const assigned=sd.courseAssignments.filter(a=>a.courseId===course.id);
-    if(!assigned.length)return;
+  const usedCourseIds=[...new Set(sd.courseAssignments.map(a=>a.courseId))];
+  usedCourseIds.forEach(cid=>{
+    const course=findCourse(cid);if(!course)return;
+    const assigned=sd.courseAssignments.filter(a=>a.courseId===cid);
+
     const cc=document.createElement('div');cc.className='course-card';
-
-    // Build shared chrono groups map: groupId -> [assignments]
-    const groupMap={};
-    assigned.forEach((a,ai)=>{
-      const gid=a.chronoGroup!=null?a.chronoGroup:`__solo_${ai}`;
-      if(!groupMap[gid])groupMap[gid]=[];
-      groupMap[gid].push({a,ai});
-    });
-
     cc.innerHTML=`<div class="course-hdr">
       <div><div class="course-name">⛳ ${course.name}</div>
-      <div class="course-dist">${course.distance?course.distance+'m':'—'}</div></div>
+      <div class="course-dist">${course.distance?course.distance+'m':'Distance non configurée'}</div></div>
       <button class="btn btn-secondary btn-xs" onclick="openAddTeamId(${course.id})">+ Équipe</button>
     </div><div class="cta" id="cta${course.id}"></div>`;
     lanes.appendChild(cc);
-    const cta=cc.querySelector(`#cta${course.id}`);
+    const cta=cc.querySelector('#cta'+course.id);
 
-    Object.entries(groupMap).forEach(([gid,members])=>{
-      const isGroup=!gid.startsWith('__solo')&&members.length>1;
-      // Use first member's chrono key as shared key
-      const firstA=members[0].a;
-      const sharedKey=`${course.id}_${firstA.teamIdx}`;
-      if(!sd.chronos[sharedKey])sd.chronos[sharedKey]={running:false,elapsed:0,start:null};
-      const scs=sd.chronos[sharedKey];
+    assigned.forEach((a,ai)=>{
+      const ci=a.colorIdx!==undefined?a.colorIdx:ai;
+      const team=sd.teams[a.teamIdx];if(!team)return;
+      const tname=sd.soloMode?team[0]:`Éq.${a.teamIdx+1} — ${team.join(' · ')}`;
+      const par=calcPar(course,team);
+      const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===a.teamIdx);
 
-      if(isGroup){
-        const bar=document.createElement('div');bar.className='shared-bar';
-        bar.innerHTML=`<span style="font-size:10px;opacity:.7">Chrono commun</span>
-          <span class="shared-time" id="chron-${sharedKey}">${fmtT(scs.elapsed)}</span>
-          <button class="btn btn-xs" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="toggleSharedChrono('${sharedKey}')" id="sbtn-${sharedKey}">${scs.running?'⏸ Pause':'▶ Démarrer'}</button>
-          <button class="btn btn-xs" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="stopSharedChrono('${sharedKey}','${gid}',${course.id})">⏹ Fin</button>`;
-        cta.appendChild(bar);
-        if(scs.running)startCI(sharedKey);
+      const row=document.createElement('div');
+      row.className=`team-row tb${ci%10}`;
+
+      let ctrl='';
+      if(result){
+        const diff=result.par?result.score-result.par:0;
+        ctrl=`<span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${result.score}c ${fmtDiff(result.score,result.par)}</span>
+          <button class="btn-icon" onclick="resetScore(${course.id},${a.teamIdx})" title="Modifier le score">✏️</button>`;
+      } else {
+        ctrl=`<button class="btn btn-primary btn-sm" onclick="openScore(${course.id},${a.teamIdx},${par||0})">📝 Entrer score</button>`;
       }
 
-      members.forEach(({a,ai})=>{
-        const ci=a.colorIdx!==undefined?a.colorIdx:ai;
-        const team=sd.teams[a.teamIdx];if(!team)return;
-        const tname=`Éq.${a.teamIdx+1} — ${team.join(' · ')}`;
-        const par=calcPar(course,team);
-        const ck=`${course.id}_${a.teamIdx}`;
-        if(!sd.chronos[ck])sd.chronos[ck]={running:false,elapsed:0,start:null};
-        const tcs=isGroup?scs:sd.chronos[ck];
-        const result=sd.courseResults.find(r=>r.courseId===course.id&&r.teamIdx===a.teamIdx);
-
-        const row=document.createElement('div');
-        row.className=`team-row tb${ci%10}`;row.id=`row-${ck}`;
-
-        let ctrl='';
-        if(result){
-          const diff=result.par?result.score-result.par:0;
-          ctrl=`<span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${result.score}c ${fmtDiff(result.score,result.par)}</span>`;
-        } else if(isGroup){
-          ctrl=`<button class="btn btn-amber btn-xs" onclick="openScore('${sharedKey}',${a.teamIdx},${course.id},${par||0})">📝 Score</button>`;
-        } else {
-          ctrl=`<button class="btn btn-primary btn-xs" id="cbtn-${ck}" onclick="toggleChrono('${ck}')">${tcs.running?'⏸':'▶'}</button>
-            <span class="chrono" id="chron-${ck}">${fmtT(tcs.elapsed)}</span>
-            <button class="btn btn-secondary btn-xs" onclick="stopChrono('${ck}',${a.teamIdx},${course.id},${par||0})" ${!tcs.elapsed&&!tcs.running?'disabled':''}>⏹</button>`;
-        }
-
-        row.innerHTML=`<div class="color-strip tc${ci%10}"></div>
-          <div class="team-info">
-            <div class="team-info-name">${tname}</div>
-            <div class="team-info-par">${par?'Objectif : '+par+' coups':'—'}</div>
-          </div>
-          <div class="tctrl">
-            ${ctrl}
-            <button class="btn-icon" onclick="toggleLink(${course.id},${a.teamIdx})" title="Grouper/dégrouper chrono" id="lbtn-${ck}">🔗</button>
-            <button class="btn-icon" onclick="removeFromCourse(${course.id},${a.teamIdx})" title="Retirer">✕</button>
-          </div>`;
-        cta.appendChild(row);
-        if(!isGroup&&tcs.running)startCI(ck);
-      });
+      row.innerHTML=`<div class="color-strip tc${ci%10}"></div>
+        <div class="team-info">
+          <div class="team-info-name">${tname}</div>
+          <div class="team-info-par">${par?'Objectif : '+par+' coups':'—'}</div>
+        </div>
+        <div class="tctrl">
+          ${ctrl}
+          <button class="btn-icon" onclick="removeFromCourse(${course.id},${a.teamIdx})" title="Retirer">✕</button>
+        </div>`;
+      cta.appendChild(row);
     });
   });
 }
 
-// Link/unlink teams to share a chrono
-function toggleLink(courseId,teamIdx){
-  const sd=SD();if(!sd)return;
-  const me=sd.courseAssignments.find(a=>a.courseId===courseId&&a.teamIdx===teamIdx);
-  if(!me)return;
-  if(me.chronoGroup!=null){me.chronoGroup=null;toast('Chrono dissocié');save();renderParcours();return;}
-  // Find teammates without group
-  const others=sd.courseAssignments.filter(a=>a.courseId===courseId&&a.teamIdx!==teamIdx&&a.chronoGroup==null);
-  if(!others.length)return toast('Pas d\'autre équipe à grouper sur ce parcours');
-  const gid='g'+courseId+'_'+Date.now();
-  me.chronoGroup=gid;
-  others.forEach(a=>a.chronoGroup=gid);
-  save();renderParcours();toast('Chronos groupés ! Tous partiront ensemble.');
-}
-
-function toggleSharedChrono(key){
-  const sd=SD();if(!sd.chronos[key])sd.chronos[key]={running:false,elapsed:0,start:null};
-  const cs=sd.chronos[key];
-  if(cs.running){cs.elapsed+=Date.now()-cs.start;cs.running=false;cs.start=null;clearInterval(CIs[key]);}
-  else{cs.running=true;cs.start=Date.now();startCI(key);}
-  const btn=document.getElementById('sbtn-'+key);
-  if(btn)btn.textContent=cs.running?'⏸ Pause':'▶ Démarrer';
-  save();
-}
-
-function stopSharedChrono(key,gid,courseId){
-  const sd=SD();if(!sd.chronos[key])return;
-  const cs=sd.chronos[key];
-  if(cs.running){cs.elapsed+=Date.now()-cs.start;cs.running=false;cs.start=null;clearInterval(CIs[key]);}
-  save();renderParcours();
-  // Open score for each team in group
-  const grouped=sd.courseAssignments.filter(a=>a.courseId===courseId&&a.chronoGroup===gid);
-  if(grouped.length)openScore(key,grouped[0].teamIdx,courseId,0);
-}
-
-function toggleChrono(key){
-  const sd=SD();if(!sd.chronos[key])sd.chronos[key]={running:false,elapsed:0,start:null};
-  const cs=sd.chronos[key];
-  if(cs.running){cs.elapsed+=Date.now()-cs.start;cs.running=false;cs.start=null;clearInterval(CIs[key]);}
-  else{cs.running=true;cs.start=Date.now();startCI(key);}
-  const btn=document.getElementById('cbtn-'+key);
-  if(btn)btn.textContent=cs.running?'⏸':'▶';
-  save();
-}
-
-function stopChrono(key,teamIdx,courseId,par){
-  const sd=SD();if(!sd.chronos[key])return;
-  const cs=sd.chronos[key];
-  if(cs.running){cs.elapsed+=Date.now()-cs.start;cs.running=false;cs.start=null;clearInterval(CIs[key]);}
-  save();openScore(key,teamIdx,courseId,par);
-}
-
 let scoreCtx=null;
-function openScore(chronoKey,teamIdx,courseId,par){
-  const sd=SD();const cd=CD();
+function openScore(courseId,teamIdx,par){
+  const sd=SD();
   const team=sd.teams[teamIdx];
-  const course=cd.courses.find(c=>c.id===courseId);
+  const course=findCourse(courseId);
   const realPar=par||calcPar(course,team)||0;
-  scoreCtx={key:chronoKey,teamIdx,courseId,par:realPar};
-  const cs=sd.chronos[chronoKey]||{elapsed:0};
-  document.getElementById('moScoreTitle').textContent=`Score — Équipe ${teamIdx+1}`;
-  document.getElementById('moScoreInfo').textContent=`${team?team.join(' & '):''} · ${fmtT(cs.elapsed)}`;
-  document.getElementById('moScoreObj').innerHTML=realPar?`Objectif : <strong>${realPar} coups</strong>`:'Pas d\'objectif calculé';
+  scoreCtx={teamIdx,courseId,par:realPar};
+  document.getElementById('moScoreTitle').textContent=sd.soloMode&&team?team[0]:`Score — Équipe ${teamIdx+1}`;
+  document.getElementById('moScoreInfo').textContent=team?team.join(' & '):'';
+  document.getElementById('moScoreObj').innerHTML=realPar?`Objectif : <strong>${realPar} coups</strong>`:'Pas objectif calcule (configurez distance + diagnostique)';
+  scoreStr='';document.getElementById('scoreDisp').textContent='—';
   buildScoreNumpad();openMo('moScore');
 }
 
+function resetScore(courseId,teamIdx){
+  const sd=SD();
+  sd.courseResults=sd.courseResults.filter(r=>!(r.courseId===courseId&&r.teamIdx===teamIdx));
+  save();renderParcours();
+}
 function confirmScore(){
   const val=parseInt(scoreStr);if(!val||val<1)return toast('Entrez un nombre');
   const sd=SD();const ctx=scoreCtx;
   sd.courseResults=sd.courseResults.filter(r=>!(r.courseId===ctx.courseId&&r.teamIdx===ctx.teamIdx));
   const diff=ctx.par?val-ctx.par:0;
-  sd.courseResults.push({courseId:ctx.courseId,teamIdx:ctx.teamIdx,score:val,par:ctx.par,diff,time:sd.chronos[ctx.key]?sd.chronos[ctx.key].elapsed:0});
+  sd.courseResults.push({courseId:ctx.courseId,teamIdx:ctx.teamIdx,score:val,par:ctx.par,diff,time:0});
   save();closeMo('moScore');renderParcours();renderClassement();
   toast(`${val} coups — ${diff===0?'PAR':diff>0?'+'+diff:diff}`);
 }
@@ -992,11 +986,17 @@ function openAddTeam(){openAddTeamId(null);}
 function openAddTeamId(courseId){
   const cd=CD();const sd=SD();
   if(!cd||!sd)return toast('Sélectionnez une classe');
-  if(!sd.teams||!sd.teams.length)return toast('Constituez des équipes d\'abord');
+  if(!sd.teams||!sd.teams.length)return toast('Constituez des équipes (ou activez le mode Solo)');
   const ts=document.getElementById('selTeam');ts.innerHTML='';
-  sd.teams.forEach((t,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`Éq.${i+1} : ${t.join(' & ')}`;ts.appendChild(o);});
+  sd.teams.forEach((t,i)=>{
+    const o=document.createElement('option');o.value=i;
+    o.textContent=sd.soloMode?t[0]:`Éq.${i+1} : ${t.join(' & ')}`;
+    ts.appendChild(o);
+  });
   const cs=document.getElementById('selCourse');cs.innerHTML='';
-  GC().forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.distance?` (${c.distance}m)`:'');if(courseId&&c.id===courseId)o.selected=true;cs.appendChild(o);});
+  const avail=getActiveCourses();
+  if(!avail.length)return toast('Aucun parcours dans la bibliothèque');
+  avail.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.distance?` (${c.distance}m)`:'');if(courseId&&c.id===courseId)o.selected=true;cs.appendChild(o);});
   openMo('moAddTeam');
 }
 
