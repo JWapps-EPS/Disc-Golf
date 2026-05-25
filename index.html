@@ -968,7 +968,10 @@ function calcPar(course,players){
   const sd=SD();if(!course.distance)return null;
   let best=0;
   const cd2=CD();players.forEach(n=>{const d=cd2&&cd2.diagData?cd2.diagData[n]:null;if(!d)return;const avg=parseFloat(calcAvg(d.t1,d.t2,d.t3));if(avg>best)best=avg;});
-  return best?Math.round(course.distance/best):null;
+  if(!best)return null;
+  // +1 coup bonus : au minimum 2 coups par parcours
+  const raw=Math.round(course.distance/best);
+  return Math.max(raw+1, 2);
 }
 
 // Chrono intervals
