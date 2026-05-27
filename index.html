@@ -897,8 +897,11 @@ function validateActiveCourses(){
 }
 
 function toggleActiveCourse(id){
+  id=parseInt(id);
   const sd=SD();if(!sd)return;
   if(!sd.activeCourseIds)sd.activeCourseIds=[];
+  // normalise existing ids to int
+  sd.activeCourseIds=sd.activeCourseIds.map(x=>parseInt(x));
   if(sd.activeCourseIds.includes(id))sd.activeCourseIds=sd.activeCourseIds.filter(x=>x!==id);
   else sd.activeCourseIds.push(id);
   save();renderActiveCfg();renderParcours();
@@ -907,7 +910,8 @@ function toggleActiveCourse(id){
 function getActiveCourses(){
   const sd=SD();const lib=GC();
   if(!sd||!sd.activeCourseIds||!sd.activeCourseIds.length)return lib;
-  return lib.filter(c=>sd.activeCourseIds.includes(c.id));
+  const normIds=sd.activeCourseIds.map(x=>parseInt(x));
+  return lib.filter(c=>normIds.includes(parseInt(c.id)));
 }
 
 // ======== PARCOURS ========
@@ -956,8 +960,20 @@ function setCourseLib(id,val){
 }
 
 function deleteCourseLib(id){
-  S.courseLib=S.courseLib.filter(c=>c.id!==id);
+  const c=findCourse(parseInt(id));
+  if(!c)return;
+  if(!confirm('Supprimer définitivement "'+c.name+'" ?\nCette action est irréversible.'))return;
+  S.courseLib=S.courseLib.filter(x=>x.id!==parseInt(id));
+  // Remove from all seances
+  Object.values(S.classes).forEach(cd=>{
+    Object.values(cd.seances||{}).forEach(sd=>{
+      if(sd.activeCourseIds)sd.activeCourseIds=sd.activeCourseIds.filter(x=>parseInt(x)!==parseInt(id));
+      if(sd.courseResults)sd.courseResults=sd.courseResults.filter(r=>parseInt(r.courseId)!==parseInt(id));
+      if(sd.courseAssignments)sd.courseAssignments=sd.courseAssignments.filter(a=>parseInt(a.courseId)!==parseInt(id));
+    });
+  });
   save();renderCfg();renderParcours();
+  toast('Parcours supprimé');
 }
 
 // legacy stubs kept for safety
