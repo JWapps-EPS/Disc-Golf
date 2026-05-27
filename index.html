@@ -1170,7 +1170,10 @@ function confirmScore(){
   sd.courseResults=sd.courseResults.filter(r=>!(r.courseId===ctx.courseId&&r.teamIdx===ctx.teamIdx));
   const diff=ctx.par?val-ctx.par:0;
   sd.courseResults.push({courseId:ctx.courseId,teamIdx:ctx.teamIdx,score:val,par:ctx.par,diff,time:0});
-  save();closeMo('moScore');renderParcours();renderClassement();
+  save();closeMo('moScore');
+  // Ferme le parcours : le suivant doit sélectionner son parcours
+  openCourseId=null;
+  renderParcours();renderClassement();
   toast(`${val} coups — ${diff===0?'PAR':diff>0?'+'+diff:diff}`);
 }
 
