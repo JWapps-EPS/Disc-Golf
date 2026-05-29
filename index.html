@@ -1173,7 +1173,9 @@ function confirmScore(){
   save();closeMo('moScore');
   // Ferme le parcours : le suivant doit sélectionner son parcours
   openCourseId=null;
-  renderParcours();renderClassement();
+  renderParcours();
+  // Met à jour les classements en temps réel
+  renderClassement();
   toast(`${val} coups — ${diff===0?'PAR':diff>0?'+'+diff:diff}`);
 }
 
@@ -1380,105 +1382,62 @@ function renderClassement(){
   }
 
   if(currentRankTab==='scratch'){
-    const sd=SD();
-    let html='';
-
-    // ── SÉANCE COURANTE ──
-    if(sd&&sd.courseResults&&sd.courseResults.length){
-      const ps={};
-      sd.courseResults.forEach(r=>{
-        const team=sd.teams[r.teamIdx];if(!team)return;
-        team.forEach(p=>{
-          if(!ps[p])ps[p]={totalStrokes:0,courses:[]};
-          ps[p].totalStrokes+=r.score;
-          const c=findCourse(r.courseId);
-          ps[p].courses.push({name:c?c.name:'P'+r.courseId,score:r.score});
-        });
-      });
-      const ranked=Object.entries(ps).sort(([_a,a],[_b,b])=>a.totalStrokes-b.totalStrokes);
-      html+=`<div class="card"><div class="card-title">🎯 Scratch individuel — Séance ${S.currentSeance}</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Coups bruts, sans référence au par. Moins de coups = meilleur.</div>
-        <table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Total coups</th><th>Détail</th></tr></thead><tbody>`;
-      ranked.forEach(([p,d],i)=>{
-        const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
-        const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-        let det='<div class="det-badges">';
-        d.courses.forEach(c=>{det+=`<span class="det-b badge-blue">${c.name.replace('Parcours','P')} : ${c.score}c</span>`;});
-        det+='</div>';
-        html+=`<tr>
-          <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
-          <td style="font-weight:500">${p}</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--blue)">${d.totalStrokes}</span></td>
-          <td>${det}</td>
-        </tr>`;
-      });
-      html+=`</tbody></table></div>`;
-      // Équipes séance
-      const ts={};
-      sd.courseResults.forEach(r=>{
-        const team=sd.teams[r.teamIdx];if(!team)return;
-        if(!ts[r.teamIdx])ts[r.teamIdx]={totalStrokes:0,team};
-        ts[r.teamIdx].totalStrokes+=r.score;
-      });
-      const rtSorted=Object.entries(ts).sort(([_a,a],[_b,b])=>a.totalStrokes-b.totalStrokes);
-      if(rtSorted.length){
-        html+=`<div class="card" style="margin-top:12px"><div class="card-title">👥 Scratch équipes — Séance ${S.currentSeance}</div>
-          <table class="rank-table"><thead><tr><th>#</th><th>Équipe</th><th>Total coups</th></tr></thead><tbody>`;
-        rtSorted.forEach(([ti,d],i)=>{
-          const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-          html+=`<tr>
-            <td><span class="rpos ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${em||(i+1)}</span></td>
-            <td>${sd.soloMode?d.team[0]:'Éq.'+(parseInt(ti)+1)+' — '+d.team.join(' & ')}</td>
-            <td><span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--blue)">${d.totalStrokes}</span></td>
-          </tr>`;
-        });
-        html+=`</tbody></table></div>`;
-      }
-    } else {
-      html='<div style="color:var(--gray-400);font-size:13px;padding:8px 0">Aucun résultat pour la séance actuelle.</div>';
-    }
-
-    // ── CUMULÉ TOUTES SÉANCES ──
+    // Cumule toutes les séances
     const allR=[];
     Object.entries(cd.seances).forEach(([sNum,sdS])=>{
       if(!sdS.courseResults||!sdS.courseResults.length)return;
       sdS.courseResults.forEach(r=>allR.push({...r,seance:sNum,teams:sdS.teams}));
     });
-    if(allR.length){
-      const psCum={};
-      allR.forEach(r=>{
-        const team=r.teams[r.teamIdx];if(!team)return;
-        team.forEach(p=>{
-          if(!psCum[p])psCum[p]={totalStrokes:0,seances:{}};
-          psCum[p].totalStrokes+=r.score;
-          if(!psCum[p].seances[r.seance])psCum[p].seances[r.seance]=0;
-          psCum[p].seances[r.seance]+=r.score;
-        });
-      });
-      const rankedCum=Object.entries(psCum).sort(([_a,a],[_b,b])=>a.totalStrokes-b.totalStrokes);
-      const seanceNums=[...new Set(allR.map(r=>r.seance))].sort((a,b)=>parseInt(a)-parseInt(b));
-      html+=`<div class="card" style="margin-top:16px"><div class="card-title">🎯 Scratch cumulé — toutes séances</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">Total de coups bruts sur l'ensemble des séances. Moins de coups = meilleur.</div>
-        <table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Total coups</th>`;
-      seanceNums.forEach(s=>{html+=`<th>S${s}</th>`;});
-      html+=`</tr></thead><tbody>`;
-      rankedCum.forEach(([p,d],i)=>{
-        const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
-        const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-        html+=`<tr>
-          <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
-          <td style="font-weight:500">${p}</td>
-          <td><span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--blue)">${d.totalStrokes}</span></td>`;
-        seanceNums.forEach(s=>{
-          const v=d.seances[s];
-          html+=`<td style="font-family:'DM Mono',monospace;font-size:13px;color:${v?'var(--blue)':'var(--gray-300)'}">${v||'—'}</td>`;
-        });
-        html+=`</tr>`;
-      });
-      html+=`</tbody></table></div>`;
-    }
+    if(!allR.length){el.innerHTML='<div class="empty-state">Aucun résultat enregistré</div>';return;}
 
-    el.innerHTML=html||'<div class="empty-state">Aucun résultat enregistré</div>';
+    const seanceNums=[...new Set(allR.map(r=>r.seance))].sort((a,b)=>parseInt(a)-parseInt(b));
+
+    // Par joueur : coups par séance
+    const ps={};
+    allR.forEach(r=>{
+      const team=r.teams[r.teamIdx];if(!team)return;
+      team.forEach(p=>{
+        if(!ps[p])ps[p]={seances:{}};
+        if(!ps[p].seances[r.seance])ps[p].seances[r.seance]=0;
+        ps[p].seances[r.seance]+=r.score;
+      });
+    });
+    // Calcul total et moyenne
+    Object.values(ps).forEach(d=>{
+      const vals=Object.values(d.seances);
+      d.total=vals.reduce((a,b)=>a+b,0);
+      d.moyenne=vals.length?d.total/vals.length:0;
+      d.nbSeances=vals.length;
+    });
+    // Tri par moyenne (+ total en tie-break)
+    const ranked=Object.entries(ps).sort(([_a,a],[_b,b])=>{
+      if(Math.abs(a.moyenne-b.moyenne)>0.001)return a.moyenne-b.moyenne;
+      return a.total-b.total;
+    });
+
+    let html=`<div class="card"><div class="card-title">🎯 Scratch — classement par moyenne de coups</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Coups bruts uniquement, sans par. Classement par moyenne de coups par séance.</div>
+      <table class="rank-table"><thead><tr>
+        <th>#</th><th>Joueur</th><th>Moy. coups</th><th>Total</th><th>Séances</th>`;
+    seanceNums.forEach(s=>{html+=`<th>S${s}</th>`;});
+    html+=`</tr></thead><tbody>`;
+    ranked.forEach(([p,d],i)=>{
+      const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
+      const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      html+=`<tr>
+        <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
+        <td style="font-weight:500">${p}</td>
+        <td><span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--blue)">${d.moyenne.toFixed(1)}</span></td>
+        <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--gray-600)">${d.total}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-400)">${d.nbSeances}</td>`;
+      seanceNums.forEach(s=>{
+        const v=d.seances[s];
+        html+=`<td style="font-family:'DM Mono',monospace;font-size:13px;color:${v?'var(--blue)':'var(--gray-300)'}">${v!=null?v:'—'}</td>`;
+      });
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    el.innerHTML=html;
   }
 }
 
