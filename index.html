@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Disc Golf EPS</title>
+<title>Disc Golf EPS v1780315959</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1312,8 +1312,16 @@ function renderClassement(){
       sd.courseResults.forEach(r=>{allResults.push({...r,seance:sNum,teams:sd.teams});});
     });
     if(!allResults.length){el.innerHTML='<div class="empty-state">Aucun résultat dans aucune séance</div>';return;}
-    // Compte le nb de séances avec résultats
-    const totalSeancesWithResults=Object.keys(perSeance).length||1;
+    // Per-seance breakdown (doit être avant totalSeancesWithResults)
+    const seanceNums=Object.keys(cd.seances).sort((a,b)=>parseInt(a)-parseInt(b));
+    const perSeance={};
+    seanceNums.forEach(sNum=>{
+      const sd=cd.seances[sNum];if(!sd||!sd.courseResults||!sd.courseResults.length)return;
+      const sps=buildPlayerScores(sd.courseResults,sd.teams);
+      perSeance[sNum]=sps;
+    });
+    const activeSeances=Object.keys(perSeance);
+    const totalSeancesWithResults=activeSeances.length||1;
     // Build per-player cumulated scores + séances jouées
     const ps={};
     allResults.forEach(r=>{
@@ -1336,15 +1344,6 @@ function renderClassement(){
       if(Math.abs(a.moyenne-b.moyenne)>0.001)return a.moyenne-b.moyenne;
       return a.total-b.total;
     });
-    // Per-seance breakdown
-    const seanceNums=Object.keys(cd.seances).sort((a,b)=>parseInt(a)-parseInt(b));
-    const perSeance={};
-    seanceNums.forEach(sNum=>{
-      const sd=cd.seances[sNum];if(!sd||!sd.courseResults||!sd.courseResults.length)return;
-      const sps=buildPlayerScores(sd.courseResults,sd.teams);
-      perSeance[sNum]=sps;
-    });
-    const activeSeances=Object.keys(perSeance);
 
     let html=`<div class="card"><div class="card-title">🌍 Classement général — toutes séances cumulées</div>`;
     if(!ranked.length){html+='<div class="empty-state">Aucun résultat</div></div>';el.innerHTML=html;return;}
