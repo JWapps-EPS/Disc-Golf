@@ -1142,14 +1142,25 @@ function deleteCourseLib(id){
 function updateCourse(i,field,val){if(GC()[i])GC()[i][field]=val;save();}
 function setCourse(i,val){if(GC()[i])GC()[i].distance=val;save();renderCfg();renderParcours();}
 
-function calcPar(course,players){
-  const sd=SD();if(!course.distance)return null;
-  let best=0;
-  const cd2=CD();players.forEach(n=>{const d=cd2&&cd2.diagData?cd2.diagData[n]:null;if(!d)return;const avg=parseFloat(calcAvg(d.t1,d.t2,d.t3));if(avg>best)best=avg;});
-  if(!best)return null;
-  // Arrondi inférieur + 1 coup bonus, minimum 2
-  const raw=Math.floor(course.distance/best);
+function calcParPlayer(distance, avg){
+  // ceil(distance / moyenne) + 1, minimum 2
+  if(!distance||!avg||avg<=0)return null;
+  const raw=Math.ceil(distance/avg);
   return Math.max(raw+1, 2);
+}
+
+function calcPar(course,players){
+  if(!course.distance)return null;
+  const cd2=CD();
+  // Par de l'équipe = meilleur (plus bas) par individuel parmi les joueurs
+  let bestPar=null;
+  players.forEach(n=>{
+    const d=cd2&&cd2.diagData?cd2.diagData[n]:null;if(!d)return;
+    const avg=parseFloat(calcAvg(d.t1,d.t2,d.t3));if(!avg||avg<=0)return;
+    const p=calcParPlayer(course.distance,avg);
+    if(p!==null&&(bestPar===null||p<bestPar))bestPar=p;
+  });
+  return bestPar;
 }
 
 // Chrono intervals
