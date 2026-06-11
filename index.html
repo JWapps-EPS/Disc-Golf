@@ -58,8 +58,8 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .player-avatar.abs{background:#ffe9c8;color:#a05c00}
 .player-name{flex:1;font-size:13px;font-weight:500}
 .absent-tag{font-size:10px;background:#fff3e0;color:#a05c00;padding:2px 6px;border-radius:10px;font-weight:600}
-.note-4{background:#2DC653;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
-.note-3{background:#A8D8EA;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.note-4{background:#1a8c3a;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.note-3{background:#7ed67e;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
 .note-2{background:#FFC107;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
 .note-1{background:#EF233C;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
 .genre-btn{padding:4px 10px;border-radius:14px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:var(--white);transition:all .15s;margin-right:3px}
@@ -307,26 +307,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 <!-- TAB ÉVALUATION -->
 <div id="tab-evaluation" class="tab-page">
   <div class="section-title">Évaluation diagnostique — Barème lancer</div>
-  <div class="grid-2" style="margin-bottom:16px">
-    <div class="card">
-      <div class="card-title">👦 Barème Garçons</div>
-      <table class="diag-table">
-        <tr style="background:#D4F5DC"><td>≥ 32,5 m</td><td style="text-align:center"><span class="note-4"></span></td></tr>
-        <tr style="background:#EEF7D0"><td>26,5 – 32,5 m</td><td style="text-align:center"><span class="note-3"></span></td></tr>
-        <tr style="background:#FFF3CD"><td>25 – 26,5 m</td><td style="text-align:center"><span class="note-2"></span></td></tr>
-        <tr style="background:#FDDDE2"><td>&lt; 25 m</td><td style="text-align:center"><span class="note-1"></span></td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <div class="card-title">👧 Barème Filles</div>
-      <table class="diag-table">
-        <tr style="background:#D4F5DC"><td>≥ 19 m</td><td style="text-align:center"><span class="note-4"></span></td></tr>
-        <tr style="background:#EEF7D0"><td>15 – 19 m</td><td style="text-align:center"><span class="note-3"></span></td></tr>
-        <tr style="background:#FFF3CD"><td>12,5 – 15 m</td><td style="text-align:center"><span class="note-2"></span></td></tr>
-        <tr style="background:#FDDDE2"><td>&lt; 12,5 m</td><td style="text-align:center"><span class="note-1"></span></td></tr>
-      </table>
-    </div>
-  </div>
+  <div class="grid-2" style="margin-bottom:16px" id="baremeCards"></div>
   <div class="card">
     <div class="flex-between" style="margin-bottom:12px">
       <div class="card-title" style="margin-bottom:0">Notes des élèves</div>
@@ -395,7 +376,12 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 
 <script>
 // ======== STATE ========
-let S={classes:{},currentClass:null,currentSeance:1,courseLib:[],nextCourseId:1};
+let S={classes:{},currentClass:null,currentSeance:1,courseLib:[],nextCourseId:1,
+  baremes:{
+    G:{s4:32.5,s3:26.5,s2:25},
+    F:{s4:19,s3:15,s2:12.5}
+  }
+};
 // courseLib: [{id, name, distance}, ...]
 const GC=()=>S.courseLib;
 const findCourse=(id)=>S.courseLib.find(c=>c.id===id);
@@ -414,6 +400,7 @@ const save=()=>localStorage.setItem('dg3',JSON.stringify(S));
 function load(){
   try{const d=localStorage.getItem('dg3');if(d)S=JSON.parse(d);}catch(e){}
   if(!S.courseLib)S.courseLib=[];
+  if(!S.baremes)S.baremes={G:{s4:32.5,s3:26.5,s2:25},F:{s4:19,s3:15,s2:12.5}};
   if(!S.nextCourseId)S.nextCourseId=(S.courseLib.length?Math.max(...S.courseLib.map(c=>c.id))+1:1);
   // Migration: old globalCourses -> courseLib
   if(S.globalCourses&&S.globalCourses.length){
@@ -880,16 +867,75 @@ function setDiag(n,field,val){
 }
 
 // ======== BAREME & EVALUATION ========
+// ======== BARÈMES ÉDITABLES ========
+function renderBaremes(){
+  const el=document.getElementById('baremeCards');
+  if(!el)return;
+  const b=S.baremes;
+  el.innerHTML=['G','F'].map(g=>{
+    const bg=b[g];
+    const icon=g==='G'?'👦':'👧';
+    const label=g==='G'?'Garçons':'Filles';
+    return `<div class="card">
+      <div class="card-title">${icon} Barème ${label}</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">Modifier les seuils (en mètres) :</div>
+      <table class="diag-table">
+        <tr style="background:#b2efc4">
+          <td style="display:flex;align-items:center;gap:8px">
+            <span class="note-4"></span>
+            <span style="font-size:12px;color:var(--gray-600)">≥</span>
+            <button class="num-btn filled" style="width:80px" onclick="openNp('Seuil vert — ${label}','m',${bg.s4},v=>updateBareme('${g}','s4',v))">${bg.s4}</button>
+            <span style="font-size:12px;color:var(--gray-400)">m</span>
+          </td><td></td>
+        </tr>
+        <tr style="background:#e2f8e2">
+          <td style="display:flex;align-items:center;gap:8px">
+            <span class="note-3"></span>
+            <span style="font-size:12px;color:var(--gray-600)">≥</span>
+            <button class="num-btn filled" style="width:80px" onclick="openNp('Seuil bleu — ${label}','m',${bg.s3},v=>updateBareme('${g}','s3',v))">${bg.s3}</button>
+            <span style="font-size:12px;color:var(--gray-400)">m</span>
+          </td><td></td>
+        </tr>
+        <tr style="background:#fff0c0">
+          <td style="display:flex;align-items:center;gap:8px">
+            <span class="note-2"></span>
+            <span style="font-size:12px;color:var(--gray-600)">≥</span>
+            <button class="num-btn filled" style="width:80px" onclick="openNp('Seuil jaune — ${label}','m',${bg.s2},v=>updateBareme('${g}','s2',v))">${bg.s2}</button>
+            <span style="font-size:12px;color:var(--gray-400)">m</span>
+          </td><td></td>
+        </tr>
+        <tr style="background:#fddde2">
+          <td style="display:flex;align-items:center;gap:8px">
+            <span class="note-1"></span>
+            <span style="font-size:12px;color:var(--gray-600)">&lt; ${bg.s2} m</span>
+          </td><td></td>
+        </tr>
+      </table>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;font-size:11px" onclick="resetBareme('${g}')">↩ Réinitialiser</button>
+    </div>`;
+  }).join('');
+}
+
+function updateBareme(genre,seuil,val){
+  if(!S.baremes)S.baremes={G:{s4:32.5,s3:26.5,s2:25},F:{s4:19,s3:15,s2:12.5}};
+  S.baremes[genre][seuil]=val;
+  save();renderBaremes();renderEval();renderDiag();
+  toast('Barème mis à jour');
+}
+
+function resetBareme(genre){
+  const defaults={G:{s4:32.5,s3:26.5,s2:25},F:{s4:19,s3:15,s2:12.5}};
+  S.baremes[genre]=Object.assign({},defaults[genre]);
+  save();renderBaremes();renderEval();renderDiag();
+  toast('Barème réinitialisé');
+}
+
 function getNote(avg,genre){
   if(!avg)return null;
   const v=parseFloat(avg);
-  if(genre==='G'){
-    if(v>=32.5)return 4;if(v>=26.5)return 3;if(v>=25)return 2;return 1;
-  }
-  if(genre==='F'){
-    if(v>=19)return 4;if(v>=15)return 3;if(v>=12.5)return 2;return 1;
-  }
-  return null;
+  const b=S.baremes&&S.baremes[genre];
+  if(!b)return null;
+  if(v>=b.s4)return 4;if(v>=b.s3)return 3;if(v>=b.s2)return 2;return 1;
 }
 
 function setGenre(name,genre){
@@ -900,6 +946,7 @@ function setGenre(name,genre){
 }
 
 function renderEval(){
+  renderBaremes();
   const cd=CD();
   const evalBody=document.getElementById('evalBody');
   const evalEmpty=document.getElementById('evalEmpty');
