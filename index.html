@@ -58,6 +58,13 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
 .player-avatar.abs{background:#ffe9c8;color:#a05c00}
 .player-name{flex:1;font-size:13px;font-weight:500}
 .absent-tag{font-size:10px;background:#fff3e0;color:#a05c00;padding:2px 6px;border-radius:10px;font-weight:600}
+.note-4{background:#2DC653;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.note-3{background:#A8D8EA;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.note-2{background:#FFC107;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.note-1{background:#EF233C;width:22px;height:22px;border-radius:50%;display:inline-block;vertical-align:middle;flex-shrink:0}
+.genre-btn{padding:4px 10px;border-radius:14px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:var(--white);transition:all .15s;margin-right:3px}
+.genre-btn.G{background:#2E4057;color:#fff;border-color:#2E4057}
+.genre-btn.F{background:#7B2D8B;color:#fff;border-color:#7B2D8B}
 
 /* ÉQUIPES */
 .drag-pool{min-height:48px;display:flex;flex-wrap:wrap;gap:6px;padding:9px;background:var(--gray-50);border-radius:9px;border:2px dashed var(--gray-200)}
@@ -189,6 +196,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
   <button class="tab-btn" onclick="showTab('diag',this)">📏 Diagnostique</button>
   <button class="tab-btn" onclick="showTab('parcours',this)">⛳ Parcours</button>
   <button class="tab-btn" onclick="showTab('classement',this)">🏆 Classement</button>
+  <button class="tab-btn" onclick="showTab('evaluation',this)">📝 Évaluation</button>
 </nav>
 
 <!-- TAB 1 JOUEURS -->
@@ -259,7 +267,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     </div>
     <div style="overflow-x:auto">
       <table class="diag-table" id="diagTable">
-        <thead><tr><th>Élève</th><th>Lancer 1 (m)</th><th>Lancer 2 (m)</th><th>Lancer 3 (m)</th><th>Moyenne</th></tr></thead>
+        <thead><tr><th>Élève</th><th>Lancer 1 (m)</th><th>Lancer 2 (m)</th><th>Lancer 3 (m)</th><th>Moyenne</th><th>Note /4</th></tr></thead>
         <tbody id="diagBody"></tbody>
       </table>
     </div>
@@ -294,6 +302,44 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     <button class="btn btn-secondary btn-sm" id="rankTabScratch" onclick="switchRankTab('scratch')">🎯 Scratch</button>
   </div>
   <div id="rankingContent"><div class="empty-state">Aucun résultat</div></div>
+</div>
+
+<!-- TAB ÉVALUATION -->
+<div id="tab-evaluation" class="tab-page">
+  <div class="section-title">Évaluation diagnostique — Barème lancer</div>
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">👦 Barème Garçons</div>
+      <table class="diag-table">
+        <tr style="background:#D4F5DC"><td>≥ 32,5 m</td><td style="text-align:center"><span class="note-4"></span></td></tr>
+        <tr style="background:#EEF7D0"><td>26,5 – 32,5 m</td><td style="text-align:center"><span class="note-3"></span></td></tr>
+        <tr style="background:#FFF3CD"><td>25 – 26,5 m</td><td style="text-align:center"><span class="note-2"></span></td></tr>
+        <tr style="background:#FDDDE2"><td>&lt; 25 m</td><td style="text-align:center"><span class="note-1"></span></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">👧 Barème Filles</div>
+      <table class="diag-table">
+        <tr style="background:#D4F5DC"><td>≥ 19 m</td><td style="text-align:center"><span class="note-4"></span></td></tr>
+        <tr style="background:#EEF7D0"><td>15 – 19 m</td><td style="text-align:center"><span class="note-3"></span></td></tr>
+        <tr style="background:#FFF3CD"><td>12,5 – 15 m</td><td style="text-align:center"><span class="note-2"></span></td></tr>
+        <tr style="background:#FDDDE2"><td>&lt; 12,5 m</td><td style="text-align:center"><span class="note-1"></span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="flex-between" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">Notes des élèves</div>
+      <button class="btn btn-secondary btn-sm" onclick="exportEval()">📊 Exporter</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="diag-table" id="evalTable">
+        <thead><tr><th>Élève</th><th>Genre</th><th>Moyenne (m)</th><th>Note /4</th></tr></thead>
+        <tbody id="evalBody"></tbody>
+      </table>
+    </div>
+    <div id="evalEmpty" class="empty-state">Ajoutez les distances dans l'onglet Diagnostique</div>
+  </div>
 </div>
 
 <!-- MODAL nouvelle classe -->
@@ -396,6 +442,7 @@ function newClassObj(){
   return {
     players:[],
     diagData:{},
+    genres:{},
     seances:{'1':{teams:[],courseAssignments:[],courseResults:[],chronos:{},absents:{}}}
   };
 }
@@ -411,6 +458,7 @@ function showTab(n,btn){
   if(n==='diag')renderDiag();
   if(n==='parcours')renderParcours();
   if(n==='classement')renderClassement();
+  if(n==='evaluation')renderEval();
 }
 
 // ======== TOAST ========
@@ -495,6 +543,7 @@ function switchClass(){
     else if(id==='diag')renderDiag();
     else if(id==='parcours')renderParcours();
     else if(id==='classement')renderClassement();
+    else if(id==='evaluation')renderEval();
   }
 }
 
@@ -814,7 +863,8 @@ function renderDiag(){
       <td><button class="num-btn${d.t1?' filled':''}" onclick="openNp('Lancer 1 — ${esc(n)}','m',${d.t1||'null'},v=>setDiag('${esc(n)}','t1',v))">${d.t1||'—'}</button></td>
       <td><button class="num-btn${d.t2?' filled':''}" onclick="openNp('Lancer 2 — ${esc(n)}','m',${d.t2||'null'},v=>setDiag('${esc(n)}','t2',v))">${d.t2||'—'}</button></td>
       <td><button class="num-btn${d.t3?' filled':''}" onclick="openNp('Lancer 3 — ${esc(n)}','m',${d.t3||'null'},v=>setDiag('${esc(n)}','t3',v))">${d.t3||'—'}</button></td>
-      <td><span class="avg-cell">${avg?avg+' m':'—'}</span></td>`;
+      <td><span class="avg-cell">${avg?avg+' m':'—'}</span></td>
+      <td>${(()=>{const g=(cd.genres&&cd.genres[n])||'';const note=getNote(avg,g);return note?'<span class="note-'+note+'"></span>':'<span style="color:var(--gray-300);font-size:11px">—</span>';})()}</td>`;
     body.appendChild(tr);
   });
 }
@@ -827,6 +877,71 @@ function calcAvg(t1,t2,t3){
 function setDiag(n,field,val){
   const cd=CD();if(!cd.diagData[n])cd.diagData[n]={t1:'',t2:'',t3:''};
   cd.diagData[n][field]=val;save();renderDiag();toast('Enregistré');
+}
+
+// ======== BAREME & EVALUATION ========
+function getNote(avg,genre){
+  if(!avg)return null;
+  const v=parseFloat(avg);
+  if(genre==='G'){
+    if(v>=32.5)return 4;if(v>=26.5)return 3;if(v>=25)return 2;return 1;
+  }
+  if(genre==='F'){
+    if(v>=19)return 4;if(v>=15)return 3;if(v>=12.5)return 2;return 1;
+  }
+  return null;
+}
+
+function setGenre(name,genre){
+  const cd=CD();if(!cd)return;
+  if(!cd.genres)cd.genres={};
+  cd.genres[name]=cd.genres[name]===genre?'':genre; // toggle
+  save();renderDiag();renderEval();
+}
+
+function renderEval(){
+  const cd=CD();
+  const evalBody=document.getElementById('evalBody');
+  const evalEmpty=document.getElementById('evalEmpty');
+  if(!evalBody)return;
+  evalBody.innerHTML='';
+  const withDiag=cd?cd.players.filter(n=>{const d=cd.diagData[n];return d&&calcAvg(d.t1,d.t2,d.t3);}):[];
+  if(!withDiag.length){
+    if(evalEmpty)evalEmpty.style.display='block';
+    document.getElementById('evalTable').style.display='none';return;
+  }
+  if(evalEmpty)evalEmpty.style.display='none';
+  document.getElementById('evalTable').style.display='table';
+  withDiag.forEach(n=>{
+    const d=cd.diagData[n]||{};
+    const avg=calcAvg(d.t1,d.t2,d.t3);
+    const genre=(cd.genres&&cd.genres[n])||'';
+    const note=getNote(avg,genre);
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><strong>'+n+'</strong></td>'
+      +'<td>'
+        +'<button class="genre-btn'+(genre==='G'?' G':'')+'" onclick="setGenre(\''+esc(n)+'\',\'G\')">👦 G</button>'
+        +'<button class="genre-btn'+(genre==='F'?' F':'')+'" onclick="setGenre(\''+esc(n)+'\',\'F\')">👧 F</button>'
+      +'</td>'
+      +'<td><span class="avg-cell">'+(avg?avg+' m':'—')+'</span></td>'
+      +'<td>'+(note?'<span class="note-'+note+'"></span>':'<span style="color:var(--gray-400);font-size:12px">—</span>')+'</td>';
+    evalBody.appendChild(tr);
+  });
+}
+
+function exportEval(){
+  const cd=CD();if(!cd)return;
+  let txt='Evaluation — '+S.currentClass+'\nEleve\tGenre\tMoyenne(m)\tNote/4\n';
+  cd.players.forEach(n=>{
+    const d=cd.diagData[n]||{};
+    const avg=calcAvg(d.t1,d.t2,d.t3);
+    const genre=(cd.genres&&cd.genres[n])||'';
+    const note=getNote(avg,genre)||'';
+    txt+=n+'\t'+genre+'\t'+(avg||'')+'\t'+note+'\n';
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+  a.download='evaluation_'+S.currentClass+'.txt';a.click();
 }
 
 function exportDiag(){
@@ -1233,9 +1348,18 @@ function fmtTTotal(ms){
   return String(m).padStart(2,'0')+'m'+String(s).padStart(2,'0')+'s';
 }
 
+function getScratchSimpleNote(total){
+  // Barème : score/par. < 4 = 4pts, 4-6 = 3pts, 6-8 = 2pts, >= 8 = 1pt
+  if(total<4)return 4;
+  if(total<=6)return 3;
+  if(total<=8)return 2;  // actually 6–8 means 6 < x <= 8
+  return 1;
+}
+
 function renderRankTable(ranked,showSeanceCol){
   if(!ranked.length)return'<div class="empty-state">Aucun résultat</div>';
-  let html=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Score/par</th><th>Coups réalisés</th><th>${showSeanceCol?'Par séance':'Parcours'}</th></tr></thead><tbody>`;
+  const noteHeader=showSeanceCol?'':'<th>Note /4</th>';
+  let html=`<table class="rank-table"><thead><tr><th>#</th><th>Joueur</th><th>Score/par</th>${noteHeader}<th>Coups réalisés</th><th>${showSeanceCol?'Par séance':'Parcours'}</th></tr></thead><tbody>`;
   ranked.forEach(([p,d],i)=>{
     const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
     const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
@@ -1264,10 +1388,12 @@ function renderRankTable(ranked,showSeanceCol){
       });
     }
     det+='</div>';
+    const noteCell=showSeanceCol?'':(`<td>${(()=>{const note=getScratchSimpleNote(d.total);return '<span class="note-'+note+'"></span>';})()}</td>`);
     html+=`<tr>
       <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
       <td style="font-weight:500">${p}</td>
       <td><span class="sc ${sc}">${ss}</span></td>
+      ${noteCell}
       <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--blue)">${d.totalStrokes||'—'}</td>
       <td>${det}</td>
     </tr>`;
@@ -1284,7 +1410,14 @@ function renderClassement(){
     if(!sd||!sd.courseResults||!sd.courseResults.length){el.innerHTML='<div class="empty-state">Aucun résultat pour cette séance</div>';return;}
     const ps=buildPlayerScores(sd.courseResults,sd.teams);
     const ranked=Object.entries(ps).sort(([_a,a],[_b,b])=>a.total-b.total);
-    let html=`<div class="card"><div class="card-title">🏆 Individuel — Séance ${S.currentSeance}</div>${renderRankTable(ranked,false)}</div>`;
+    let html=`<div class="card"><div class="card-title">🏆 Individuel — Séance ${S.currentSeance}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-4"></span>&lt; 4</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-3"></span>4 – 6</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-2"></span>6 – 8</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-1"></span>≥ 8</span>
+      </div>
+      ${renderRankTable(ranked,false)}</div>`;
     // Team ranking for this seance
     const ts={};
     sd.courseResults.forEach(r=>{const team=sd.teams[r.teamIdx];if(!team)return;const diff=r.par?r.score-r.par:0;const t=r.time||0;if(!ts[r.teamIdx])ts[r.teamIdx]={total:0,totalTime:0,team};ts[r.teamIdx].total+=diff;ts[r.teamIdx].totalTime+=t;});
@@ -1415,18 +1548,28 @@ function renderClassement(){
     });
 
     let html=`<div class="card"><div class="card-title">🎯 Scratch — classement par moyenne de coups</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Coups bruts uniquement, sans par. Classement par moyenne de coups par séance.</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">Coups bruts uniquement, sans par. Classement par moyenne de coups par séance. Note selon le barème scratch.</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-4"></span>&lt; 17,45</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-3"></span>17,45 – 19,8</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-2"></span>19,8 – 21,25</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:#f5f5f5;border-radius:6px;font-size:12px"><span class="note-1"></span>≥ 21,25</span>
+      </div>
       <table class="rank-table"><thead><tr>
-        <th>#</th><th>Joueur</th><th>Moy. coups</th><th>Total</th><th>Séances</th>`;
+        <th>#</th><th>Joueur</th><th>Moy. coups</th><th>Note /4</th><th>Total</th><th>Séances</th>`;
     seanceNums.forEach(s=>{html+=`<th>S${s}</th>`;});
     html+=`</tr></thead><tbody>`;
     ranked.forEach(([p,d],i)=>{
       const pos=i===0?'gold':i===1?'silver':i===2?'bronze':'';
       const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      const moy=d.moyenne;
+      const note=moy<17.45?4:moy<=19.8?3:moy<=21.25?2:1;
+      const noteCls='note-'+note;
       html+=`<tr>
         <td><span class="rpos ${pos}">${em||(i+1)}</span></td>
         <td style="font-weight:500">${p}</td>
-        <td><span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--blue)">${d.moyenne.toFixed(1)}</span></td>
+        <td><span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--blue)">${moy.toFixed(1)}</span></td>
+        <td><span class="${noteCls}"></span></td>
         <td style="font-family:'DM Mono',monospace;font-size:13px;color:var(--gray-600)">${d.total}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-400)">${d.nbSeances}</td>`;
       seanceNums.forEach(s=>{
