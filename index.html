@@ -1297,13 +1297,15 @@ function renderParcours(){
     done.forEach(({team,ti,result})=>{
       const tci=ti%10;
       const tname=sd.soloMode?team[0]:`Éq.${ti+1} — ${team.join(' · ')}`;
-      const diff=result.par?result.score-result.par:0;
+      // Recalcule le par en temps réel pour corriger d'éventuels anciens enregistrements
+      const currentPar=calcPar(course,team)||result.par||0;
+      const diff=currentPar?result.score-currentPar:0;
       const row=document.createElement('div');
       row.className=`team-row tb${tci} done`;
       row.innerHTML=`<div class="color-strip tc${tci}"></div>
         <div class="team-info">
           <div class="team-info-name">${tname}</div>
-          <div class="team-info-par">${result.score} coups ${fmtDiff(result.score,result.par)}</div>
+          <div class="team-info-par">${result.score} coups ${fmtDiff(result.score,currentPar)}</div>
         </div>
         <div class="tctrl">
           <span class="badge ${diff<0?'badge-green':diff>0?'badge-red':'badge-gray'}">${diff===0?'PAR':(diff>0?'+':'')+diff}</span>
@@ -1322,7 +1324,8 @@ function openScore(courseId,teamIdx,par){
   const sd=SD();
   const team=sd.teams[teamIdx];
   const course=findCourse(courseId);
-  const realPar=par||calcPar(course,team)||0;
+  // Toujours recalculer le par à la volée (ignore le par passé en paramètre)
+  const realPar=calcPar(course,team)||0;
   scoreCtx={teamIdx,courseId,par:realPar};
   document.getElementById('moScoreTitle').textContent=sd.soloMode&&team?team[0]:`Score — Équipe ${teamIdx+1}`;
   document.getElementById('moScoreInfo').textContent=team?team.join(' & '):'';
