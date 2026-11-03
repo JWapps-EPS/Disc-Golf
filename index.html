@@ -211,6 +211,10 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
         <span style="font-size:11px;color:var(--gray-400)">Un nom par ligne · Ctrl+Entrée ou bouton</span>
         <button class="btn btn-primary btn-sm" onclick="addPlayer()">Ajouter</button>
       </div>
+      <div style="margin-top:8px">
+        <input type="file" id="playerFile" accept=".txt,.csv,.tsv,text/plain,text/csv" style="display:none" onchange="importPlayerFile(this)">
+        <button class="btn btn-sm" onclick="document.getElementById('playerFile').click()">📂 Importer un fichier (.txt / .csv)</button>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">📋 Séance</div>
@@ -574,6 +578,21 @@ function renderSeanceSel(){
 }
 
 // ======== JOUEURS ========
+function importPlayerFile(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=function(){
+    let t=String(r.result).replace(/^\uFEFF/,'');
+    const lines=t.split(/\r?\n/).map(function(l){
+      return l.split(/[;\t]/).map(function(c){return c.replace(/^"|"$/g,'').trim();}).filter(Boolean).join(' ');
+    }).filter(Boolean);
+    const inp=document.getElementById('newPlayerName');
+    inp.value=(inp.value.trim()?inp.value.trim()+'\n':'')+lines.join('\n');
+    input.value='';
+    toast(lines.length+' nom(s) charg\u00e9(s) : v\u00e9rifiez puis cliquez Ajouter');
+  };
+  r.readAsText(f,'UTF-8');
+}
 function addPlayer(){
   const cd=CD();if(!cd)return toast('Sélectionnez une classe');
   const inp=document.getElementById('newPlayerName');
