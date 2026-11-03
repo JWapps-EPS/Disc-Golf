@@ -187,6 +187,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     <label>Classe :</label>
     <select id="classSelect" onchange="switchClass()"><option value="">— choisir —</option></select>
     <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="openNewClassModal()">+ Classe</button>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="deleteClass()" title="Supprimer la classe">🗑</button>
   </div>
 </header>
 
@@ -516,6 +517,18 @@ function updateClassSel(){
   const sel=document.getElementById('classSelect');
   sel.innerHTML='<option value="">— choisir —</option>';
   Object.keys(S.classes).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===S.currentClass)o.selected=true;sel.appendChild(o);});
+}
+function deleteClass(){
+  const c=S.currentClass;
+  if(!c||!S.classes[c])return toast('Choisissez une classe');
+  if(!confirm('Supprimer définitivement la classe "'+c+'" et toutes ses données (élèves, équipes, scores) ?\nCette action est irréversible.'))return;
+  delete S.classes[c];
+  const rest=Object.keys(S.classes);
+  S.currentClass=rest.length?rest[0]:'';
+  S.currentSeance=1;
+  updateClassSel();
+  switchClass();
+  toast('Classe supprimée');
 }
 function switchClass(){
   S.currentClass=document.getElementById('classSelect').value;
