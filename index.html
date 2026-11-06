@@ -188,6 +188,7 @@ input[type=text]:focus,input[type=number]:focus,select.form-select:focus{border-
     <select id="classSelect" onchange="switchClass()"><option value="">— choisir —</option></select>
     <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="openNewClassModal()">+ Classe</button>
     <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2)" onclick="deleteClass()" title="Supprimer la classe">🗑</button>
+    <button class="btn btn-sm" id="lockBtn" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation" oncontextmenu="return false" title="Appui long pour déverrouiller">🔒</button>
   </div>
 </header>
 
@@ -1681,6 +1682,54 @@ function renderAll(){renderPlayers();renderSeanceSel();}
 load();updateClassSel();renderAll();
 const ck=Object.keys(S.classes);
 if(!S.currentClass&&ck.length){S.currentClass=ck[0];document.getElementById('classSelect').value=S.currentClass;renderAll();}
+
+// ======== MODE PROF (verrouillage) ========
+let TEACHER=false;
+function getPin(){try{return localStorage.getItem('dgpin');}catch(e){return null;}}
+function setTeacher(on){
+  TEACHER=on;
+  document.getElementById('lockBtn').textContent=on?'🔓':'🔒';
+  applyTabLock();
+  toast(on?'Mode professeur actif':'Mode professeur verrouillé');
+}
+const PROF_TABS=['joueurs','equipes','diag','evaluation'];
+function applyTabLock(){
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    const m=(b.getAttribute('onclick')||'').match(/showTab\('(\w+)'/);
+    if(m&&PROF_TABS.indexOf(m[1])>=0){b.style.opacity=TEACHER?'':'0.35';b.style.pointerEvents=TEACHER?'':'none';}
+  });
+  if(!TEACHER){
+    const act=document.querySelector('.tab-page.active');
+    if(act&&PROF_TABS.indexOf(act.id.replace('tab-',''))>=0){
+      const pb=Array.from(document.querySelectorAll('.tab-btn')).find(function(b){return (b.getAttribute('onclick')||'').indexOf("'parcours'")>0;});
+      showTab('parcours',pb);
+    }
+  }
+}
+(function(){
+  const b=document.getElementById('lockBtn');let t=null,fired=false,was=false,down=false;
+  b.addEventListener('pointerdown',function(){
+    down=true;fired=false;was=TEACHER;
+    if(was)return;
+    t=setTimeout(function(){fired=true;setTeacher(true);},1200);
+  });
+  b.addEventListener('pointerup',function(){
+    clearTimeout(t);
+    if(!down)return;down=false;
+    if(was)setTeacher(false);
+    else if(!fired)toast('Maintenez le cadenas appuyé pour déverrouiller');
+  });
+  ['pointerleave','pointercancel'].forEach(function(ev){b.addEventListener(ev,function(){clearTimeout(t);down=false;});});
+})();
+(function(){const o=window.showTab;window.showTab=function(n,btn){if(!TEACHER&&PROF_TABS.indexOf(n)>=0){toast('Réservé au professeur');return;}return o.apply(this,arguments);};})();
+applyTabLock();
+['pairPlayers','removeFromTeam','randomTeams','clearTeams','rankTeams','toggleSoloMode','deleteClass','openNewClassModal','removePlayer','toggleAbsent','addPlayer','importPlayerFile'].forEach(function(n){
+  const o=window[n];if(typeof o!=='function')return;
+  window[n]=function(){
+    if(!TEACHER){toast('Réservé au professeur : cliquez sur le cadenas 🔒');return;}
+    return o.apply(this,arguments);
+  };
+});
 </script>
 </body>
 </html>
